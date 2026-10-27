@@ -102,7 +102,8 @@
   .headsup strong { color: var(--accent); font-weight: 600; }
   .wear { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }   /* upper body / lower body + hi-viz */
   .wear .w { background: var(--panel-2); border-radius: 12px; padding: 8px 10px; min-width: 0; }
-  .wear .w.viz { background: color-mix(in srgb, #d7ff3a 16%, var(--panel-2)); display: flex; align-items: center; justify-content: center; }
+  .wear .w.viz { display: flex; align-items: center; justify-content: center; }
+  .wear .w.viz.on { background: color-mix(in srgb, #d7ff3a 16%, var(--panel-2)); }
   .wear .w.viz svg { width: 2.1rem; height: 2.1rem; display: block; }
   .wear .k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.62rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
   .wear .v { font-size: 0.98rem; font-weight: 600; margin-top: 2px; line-height: 1.2; }
@@ -727,10 +728,11 @@ function fmtWear(v, kind) {
   }
 }
 
-// Safety vest with reflective stripes, for the hi-viz tile
-const VEST = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-  '<path d="M8.6 2.5 5 4.2 3.8 8.2 4.4 21.5H11V10.5L8.6 2.5zM15.4 2.5 19 4.2 20.2 8.2 19.6 21.5H13V10.5L15.4 2.5z" fill="#d7ff3a"/>' +
-  '<path d="M4.2 14.2H11M13 14.2h6.8M4.3 17.6H11M13 17.6h6.6" stroke="#e8eef4" stroke-width="1.5"/></svg>';
+// Safety vest with reflective stripes for the hi-viz tile: bright when suggested, grayed out and crossed out when not
+const vest = (on) => '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  `<path d="M8.6 2.5 5 4.2 3.8 8.2 4.4 21.5H11V10.5L8.6 2.5zM15.4 2.5 19 4.2 20.2 8.2 19.6 21.5H13V10.5L15.4 2.5z" fill="${on ? "#d7ff3a" : "#3a4756"}"/>` +
+  `<path d="M4.2 14.2H11M13 14.2h6.8M4.3 17.6H11M13 17.6h6.6" stroke="${on ? "#e8eef4" : "#566475"}" stroke-width="1.5"/>` +
+  (on ? "" : '<path d="M3 3 21 21M21 3 3 21" stroke="#8a9aab" stroke-width="1.8" stroke-linecap="round"/>') + "</svg>";
 
 function renderWear() {
   const x = whatToWear(state.wx);
@@ -744,7 +746,7 @@ function wearHTML(x) {
     tile("Insulation", x.insulation, x.insulation === "None" ? "off" : "") +
     tile("Pants", x.pants, x.pants === "None" ? "off" : "wet") +
     tile("Footwear", x.feet, x.feet === "Gore-Tex" ? "wet" : "") +
-    (x.viz ? `<div class="w viz" title="Hi-Viz" aria-label="Wear hi-viz">${VEST}</div>` : "") +
+    `<div class="w viz ${x.viz ? "on" : ""}" title="Hi-Viz" aria-label="${x.viz ? "Wear hi-viz" : "Hi-viz not needed"}">${vest(!!x.viz)}</div>` +
     `<div class="why">${x.why}</div>`;
 }
 
