@@ -11,6 +11,7 @@
 <title>Mudroom Weather</title>
 <link rel="preconnect" href="https://api.open-meteo.com" crossorigin>
 <link rel="preconnect" href="https://api.weather.gov" crossorigin>
+<link rel="preconnect" href="https://air-quality-api.open-meteo.com" crossorigin>
 <link rel="preconnect" href="https://mesonet.agron.iastate.edu">
 <link rel="preconnect" href="https://mesonet.agron.iastate.edu" crossorigin>
 <link rel="preconnect" href="https://server.arcgisonline.com">
@@ -454,6 +455,7 @@ const state = {
   walks: [1, 2, 3],
   view: VIEWS.includes(store.get("view")) ? store.get("view") : "hourly",
   wx: null,
+  air: null,                       // {aqi, pm25}
   lastOk: 0,
   isUS: false,
 };
@@ -552,7 +554,9 @@ function setLocation(loc) {
   $("place").textContent = loc.name || `${loc.lat.toFixed(2)}, ${loc.lon.toFixed(2)}`;
   if (!loc.name) reverseName(loc);
 
-  // Paint instantly from the last good response, then refresh in the background.
+  // Paint instantly from the last good responses, then refresh in the background.
+  const air = store.get("air", null);
+  state.air = air?.key === cacheKey() ? { aqi: air.aqi, pm25: air.pm25 } : null;
   const cached = store.get("cache", null);
   if (cached?.key === cacheKey()) {
     state.wx = cached.wx;
@@ -656,7 +660,28 @@ async function loadNwsText() {
   } catch (e) { console.warn(e); }
 }
 
-function refreshAll() { if (state.loc) { loadWeather(); loadAlerts(); loadNwsText(); } }
+// Current US AQI (Open-Meteo air quality, no key). Kept separate so a slow or failed call never holds up the forecast.
+async function loadAir() {
+  try {
+    const key = cacheKey(), { lat, lon } = state.loc;
+    const j = await getJSON(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5`);
+    if (key !== cacheKey() || j.current?.us_aqi == null) return;
+    state.air = { aqi: j.current.us_aqi, pm25: j.current.pm2_5 };
+    store.set("air", { key, ...state.air });
+    if (state.wx) renderNow(state.wx);
+  } catch (e) { console.warn(e); }
+}
+
+// EPA categories, with colors lightened to read on the dark panel
+function aqiHTML() {
+  if (!state.air) return "—";
+  const a = state.air.aqi;
+  const [name, color] = a <= 50 ? ["Good", "#4dd0a8"] : a <= 100 ? ["Moderate", "#ffd84a"] : a <= 150 ? ["Sensitive", "#ff9f43"]
+    : a <= 200 ? ["Unhealthy", "#ff5a5f"] : a <= 300 ? ["Very unhealthy", "#c084fc"] : ["Hazardous", "#e0607e"];
+  return `<span style="color:${color}" title="US AQI ${r(a)} · PM2.5 ${state.air.pm25 ?? "—"} µg/m³">${r(a)} ${name}</span>`;
+}
+
+function refreshAll() { if (state.loc) { loadWeather(); loadAlerts(); loadNwsText(); loadAir(); } }
 
 /* ================= rendering ================= */
 function render() {
@@ -687,10 +712,9 @@ function renderNow(w) {
   const gust = c.wind_gusts_10m - c.wind_speed_10m >= 8 ? ` · G${r(c.wind_gusts_10m)}` : "";
   const stats = [
     ["Wind", `${r(c.wind_speed_10m)} ${u.wind} ${compass(c.wind_direction_10m)}${gust}`],
-    ["Humidity", `${r(c.relative_humidity_2m)}%`],
-    ["Dew point", `${r(c.dew_point_2m)}°`],
+    ["Humidity / Dew pt", `${r(c.relative_humidity_2m)}% · ${r(c.dew_point_2m)}°`],
+    ["UV / AQI", `${r(c.uv_index ?? 0)} · ${aqiHTML()}`],
     ["Pressure", pressure],
-    ["UV index", `${r(c.uv_index ?? 0)} · max ${r(d.uv_index_max[ti] ?? 0)}`],
     [sunLabel, fTime(sunT)],
   ];
   $("stats").innerHTML = stats.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
