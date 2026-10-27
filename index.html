@@ -115,7 +115,7 @@
   .walk-btn { margin-left: auto; padding: 5px 12px; border-radius: 999px; background: var(--panel-2); font-size: 0.82rem; font-weight: 600; color: var(--accent); }
   .walk-btn::after { content: ""; display: inline-block; margin-left: 6px; border: 4px solid transparent; border-top-color: currentColor; vertical-align: -1px; }
   .walk-btn:active { background: var(--line); }
-  #walk-dialog { width: auto; }
+  #walk-dialog { width: fit-content; }   /* dialogs are pinned to both edges, so "auto" would stretch full width */
   .walk-pick { padding: 18px 20px 20px; display: grid; gap: 14px; text-align: center; }
   .walk-pick .t { font-size: 1rem; font-weight: 600; }
   .walk-pick .row3 { display: grid; grid-template-columns: repeat(3, 5.5rem); gap: 10px; }
