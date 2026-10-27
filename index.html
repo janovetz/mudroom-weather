@@ -114,7 +114,21 @@
   .wear .w.wet .v { color: var(--rain); }
   .wear .w.ice { background: color-mix(in srgb, #a8e4ff 14%, var(--panel-2)); }
   .wear .w.ice .v { color: #a8e4ff; }
-  .wear-block { display: grid; gap: 6px; }
+  .wear-block { display: grid; gap: 6px; position: relative; }
+  .wear .w[data-layer] { cursor: pointer; }
+  .wear .w[data-layer]:active { filter: brightness(1.25); }
+  .wear .w.sel { box-shadow: inset 0 0 0 2px var(--accent); }
+  .wear-tip {
+    position: absolute; z-index: 20; width: min(19rem, 100%);
+    background: #1f2b38; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+    font-size: 0.85rem; line-height: 1.45; color: var(--muted); box-shadow: 0 10px 28px rgba(0,0,0,.55);
+  }
+  .wear-tip[hidden] { display: none; }
+  .wear-tip b { display: block; color: var(--text); margin-bottom: 3px; }
+  .wear-tip::before {   /* arrow pointing at the tapped tile */
+    content: ""; position: absolute; top: -6px; left: calc(var(--ax, 50%) - 6px); width: 10px; height: 10px;
+    background: #1f2b38; border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: rotate(45deg);
+  }
   .wear-head { display: flex; align-items: center; gap: 8px; }
   .wear-head .lbl { font-size: 0.68rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
   .walk-btn { margin-left: auto; padding: 5px 12px; border-radius: 999px; background: var(--panel-2); font-size: 0.82rem; font-weight: 600; color: var(--accent); }
@@ -299,6 +313,7 @@
           <button class="walk-btn" id="walk-btn" aria-haspopup="dialog">Out for 1 hr</button>
         </div>
         <div class="wear" id="wear"></div>
+        <div class="wear-tip" id="wear-tip" role="tooltip" hidden></div>
       </div>
       <div class="headsup" id="headsup"></div>
       <div class="stats" id="stats"></div>
@@ -799,15 +814,62 @@ function whatToWear(w) {
   const darkNow = isDark(now), dark = darkNow || isDark(end);
   const nextSunset = d.sunset.find((t) => t > now);
 
+  const head = peak >= S.hatRate || beyondDrizzle ? "Gore-Tex"
+    : insulation === "Heavy" ? "Insulated"
+    : insulation === "Medium" || uv >= S.capUV || wetNow || possible ? "Cap" : "None";
+  const shell = wetNow ? "Gore-Tex" : possible || wind >= S.softWind ? "Soft Shell" : "None";
+  const pants = moderate ? "Shell" : "None";
+  const feet = icy ? "Yak Trax" : wetNow || snowGround || wetFeet >= S.feetWet ? "Gore-Tex" : "Light";
+
+  // Plain-language reasons for the tap-for-details popups, using the same values and set points as the decisions.
+  const T = (f) => fmtWear(f, "temp"), RATE = (x) => fmtWear(x, "rate"), WIND = (x) => fmtWear(x, "wind");
+  const out = `your ${fmtWear(S.walk, "hours")} out`, skyPct = r(sky * 100);
+  const worst = (list) => wxInfo(Math.max(...list)).label.toLowerCase();
+  const join = (parts) => parts.filter(Boolean).join("; ");
+  const reasons = {
+    head: head === "Gore-Tex"
+      ? (peak >= S.hatRate ? `Rain/snow up to ${RATE(peak)} during ${out} (Gore-Tex from ${RATE(S.hatRate)}).`
+        : `Forecast calls for ${worst(codes)} — heavier than light drizzle.`)
+      : head === "Insulated" ? `Feels as cold as ${T(coldest)} — below ${T(S.heavy)}, so an insulated hat.`
+      : head === "Cap" ? "Cap for: " + join([
+          insulation === "Medium" && `cool enough for Medium insulation (feels ${T(coldest)})`,
+          uv >= S.capUV && `UV up to ${r(uv)} (cap from ${S.capUV})`,
+          wetNow && "light drizzle",
+          possible && `showers possible (${skyPct}% chance)`,
+        ]) + "."
+      : `Dry, UV up to ${r(uv)} (cap from ${S.capUV}), and feels ${T(coldest)} — milder than ${T(S.medium)}.`,
+    shell: shell === "Gore-Tex"
+      ? (peak >= S.goreRate ? `Rain/snow up to ${RATE(peak)} during ${out} (Gore-Tex from ${RATE(S.goreRate)}).`
+        : `${cap(wxInfo(c.weather_code).label)} reported now.`)
+      : shell === "Soft Shell" ? "Soft Shell for: " + join([
+          possible && `showers possible (${skyPct}% chance; soft shell from ${S.softChance}%)`,
+          wind >= S.softWind && `wind up to ${WIND(wind)} (soft shell from ${WIND(S.softWind)})`,
+        ]) + "."
+      : `No rain expected (highest chance ${skyPct}%) and wind up to ${WIND(wind)} — under ${WIND(S.softWind)}.`,
+    insulation: `Coldest feels-like during ${out}: ${T(coldest)}. Heavy below ${T(S.heavy)}, Medium below ${T(S.medium)}, ` +
+      `Light below ${T(S.light)}.`,
+    pants: pants === "Shell"
+      ? (peak >= S.pantsRate ? `Rain/snow up to ${RATE(peak)} (shell pants from ${RATE(S.pantsRate)}).`
+        : `Forecast calls for ${worst(codes.filter((k) => MODERATE_CODES.includes(k)))} — moderate or heavier.`)
+      : `No moderate rain expected${peak > 0 ? ` (up to ${RATE(peak)})` : ""}; shell pants from ${RATE(S.pantsRate)}.`,
+    feet: feet === "Yak Trax"
+      ? (freezingPrecip ? "Freezing rain or drizzle in the forecast."
+        : `Ground surface down to ${T(surface)} (Yak Trax at ${T(S.iceTemp)} or below) with ` +
+          `${snowGround ? "snow on the ground" : snowy ? "snow expected" : "the ground still wet"}.`)
+      : feet === "Gore-Tex"
+      ? (wetNow ? `Rain or drizzle during ${out}.` : snowGround ? "Snow on the ground."
+        : `Wet-feet chance ${wetFeet}% (ground ${r(ground * 100)}%, rain chance ${skyPct}%) — Gore-Tex from ${S.feetWet}%.`)
+      : `Wet-feet chance ${wetFeet}% (ground ${r(ground * 100)}%, rain chance ${skyPct}%) — under ${S.feetWet}%, and no ice risk.`,
+    viz: dark
+      ? (darkNow ? `Low light now (Hi-Viz from ${S.dimMins} min before sunset until ${S.dimMins} min after sunrise).`
+        : `Low light from ${fTime(nextSunset - dim)}, ${S.dimMins} min before the ${fTime(nextSunset)} sunset — during ${out}.`)
+      : `Daylight for all of ${out}; low light starts at ${fTime(nextSunset - dim)}.`,
+  };
+
   return {
-    head: peak >= S.hatRate || beyondDrizzle ? "Gore-Tex"
-      : insulation === "Heavy" ? "Insulated"
-      : insulation === "Medium" || uv >= S.capUV || wetNow || possible ? "Cap" : "None",
-    shell: wetNow ? "Gore-Tex" : possible || wind >= S.softWind ? "Soft Shell" : "None",
-    insulation,
-    pants: moderate ? "Shell" : "None",
-    feet: icy ? "Yak Trax" : wetNow || snowGround || wetFeet >= S.feetWet ? "Gore-Tex" : "Light",
+    head, shell, insulation, pants, feet,
     viz: dark ? "Hi-Viz" : null,
+    reasons,
     why: [
       `Feels ${r(fMin)}°${r(fMax) !== r(fMin) ? "–" + r(fMax) + "°" : ""}`,
       wetNow && peak > 0 && `${snowy ? "snow" : "rain"} up to ${fmtWear(peak, "rate")}`,
@@ -846,8 +908,48 @@ const vest = (on) => '<svg viewBox="0 0 24 24" aria-hidden="true">' +
 function renderWear() {
   const n = state.wear.walk;
   $("walk-btn").textContent = `Out for ${n} hr${n > 1 ? "s" : ""}`;
-  if (state.wx) $("wear").innerHTML = wearHTML(whatToWear(state.wx));
+  if (!state.wx) return;
+  state.wearNow = whatToWear(state.wx);
+  $("wear").innerHTML = wearHTML(state.wearNow);
+  if (tip.layer) fillTip();   // keep an open popup current across the minute-by-minute refresh
 }
+
+// Tap a wear tile for its reasoning. One popup at a time; tap the tile again, elsewhere, or wait 10 s to close.
+const WEAR_NAMES = { head: "Headwear", shell: "Shell", insulation: "Insulation", pants: "Pants", feet: "Footwear", viz: "Hi-Viz" };
+const tip = { layer: null, timer: null };
+function fillTip() {
+  const x = state.wearNow, el = $("wear-tip"), layer = tip.layer;
+  const tile = $("wear").querySelector(`[data-layer="${layer}"]`);
+  if (!x || !tile) return hideTip();
+  const value = layer === "viz" ? (x.viz ? "wear it" : "not needed") : x[layer];
+  el.innerHTML = `<b>${WEAR_NAMES[layer]}: ${value}</b>${x.reasons[layer]}`;
+  $("wear").querySelectorAll(".sel").forEach((t) => t.classList.remove("sel"));
+  tile.classList.add("sel");
+  el.hidden = false;
+  // place under the tile, kept inside the panel, with the arrow pointing at the tile's center
+  const box = el.parentElement.clientWidth, center = tile.offsetLeft + tile.offsetWidth / 2;
+  const left = Math.max(0, Math.min(box - el.offsetWidth, center - el.offsetWidth / 2));
+  el.style.left = left + "px";
+  el.style.top = tile.offsetTop + tile.offsetHeight + 8 + "px";
+  el.style.setProperty("--ax", center - left + "px");
+}
+function hideTip() {
+  tip.layer = null;
+  clearTimeout(tip.timer);
+  $("wear-tip").hidden = true;
+  $("wear").querySelectorAll(".sel").forEach((t) => t.classList.remove("sel"));
+}
+$("wear").addEventListener("click", (e) => {
+  const t = e.target.closest("[data-layer]");
+  if (!t) return;
+  e.stopPropagation();
+  if (tip.layer === t.dataset.layer) return hideTip();
+  tip.layer = t.dataset.layer;
+  fillTip();
+  clearTimeout(tip.timer);
+  tip.timer = setTimeout(hideTip, 10e3);
+});
+document.addEventListener("click", (e) => { if (tip.layer && !e.target.closest("#wear-tip")) hideTip(); });
 
 // Quick picker on the main panel: how long you'll be outside (applies to every layer).
 if (!state.walks.includes(state.wear.walk)) state.wear.walk = WEAR_DEFAULTS.walk;
@@ -866,13 +968,14 @@ $("walk-dialog").addEventListener("click", (e) => {
 });
 
 function wearHTML(x) {
-  const tile = (k, v, cls) => `<div class="w ${cls}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
-  return tile("Headwear", x.head, x.head === "None" ? "off" : x.head === "Gore-Tex" ? "wet" : "") +
-    tile("Shell", x.shell, x.shell === "None" ? "off" : x.shell === "Gore-Tex" ? "wet" : "") +
-    tile("Insulation", x.insulation, x.insulation === "None" ? "off" : "") +
-    tile("Pants", x.pants, x.pants === "None" ? "off" : "wet") +
-    tile("Footwear", x.feet, x.feet === "Yak Trax" ? "ice" : x.feet === "Gore-Tex" ? "wet" : "") +
-    `<div class="w viz ${x.viz ? "on" : ""}" title="Hi-Viz" aria-label="${x.viz ? "Wear hi-viz" : "Hi-viz not needed"}">${vest(!!x.viz)}</div>` +
+  const tile = (layer, k, v, cls) =>
+    `<div class="w ${cls}" data-layer="${layer}" role="button" tabindex="0"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  return tile("head", "Headwear", x.head, x.head === "None" ? "off" : x.head === "Gore-Tex" ? "wet" : "") +
+    tile("shell", "Shell", x.shell, x.shell === "None" ? "off" : x.shell === "Gore-Tex" ? "wet" : "") +
+    tile("insulation", "Insulation", x.insulation, x.insulation === "None" ? "off" : "") +
+    tile("pants", "Pants", x.pants, x.pants === "None" ? "off" : "wet") +
+    tile("feet", "Footwear", x.feet, x.feet === "Yak Trax" ? "ice" : x.feet === "Gore-Tex" ? "wet" : "") +
+    `<div class="w viz ${x.viz ? "on" : ""}" data-layer="viz" role="button" tabindex="0" aria-label="${x.viz ? "Wear hi-viz" : "Hi-viz not needed"}">${vest(!!x.viz)}</div>` +
     `<div class="why">${x.why}</div>`;
 }
 
