@@ -100,10 +100,18 @@
   .headsup { font-size: 0.92rem; line-height: 1.45; padding: 10px 14px; border-radius: 12px; background: var(--panel-2); }
   .headsup:empty { display: none; }
   .headsup strong { color: var(--accent); font-weight: 600; }
+  .wear { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .wear .w { background: var(--panel-2); border-radius: 12px; padding: 8px 10px; min-width: 0; }
+  .wear .k { font-size: 0.62rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
+  .wear .v { font-size: 0.98rem; font-weight: 600; margin-top: 2px; line-height: 1.2; }
+  .wear .w.off .v { color: var(--faint); font-weight: 400; }
+  .wear .w.wet .v { color: var(--rain); }
+  .wear .x { font-size: 0.68rem; color: var(--muted); margin-top: 1px; }
+  .wear .why { grid-column: 1 / -1; font-size: 0.72rem; color: var(--faint); margin-top: -2px; }
   .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
   .stat .k { font-size: 0.68rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
   .stat .v { font-size: 1.02rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .nws { font-size: 0.86rem; color: var(--muted); line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; }
+  .nws { font-size: 0.86rem; color: var(--muted); line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; }
   .nws:empty { display: none; }
   .nws b { color: var(--text); font-weight: 600; }
 
@@ -236,6 +244,7 @@
         <div class="now-desc" id="now-desc"></div>
         <div class="now-sub" id="now-sub"></div>
       </div>
+      <div class="wear" id="wear"></div>
       <div class="headsup" id="headsup"></div>
       <div class="stats" id="stats"></div>
       <div class="nws" id="nws"></div>
@@ -311,7 +320,8 @@
 const WEATHER_EVERY = 10 * 60e3;
 const ALERTS_EVERY  = 5 * 60e3;
 const RADAR_EVERY   = 5 * 60e3;
-const RADAR_FRAMES  = 11;         // 50 minutes of 5-minute scans
+const RADAR_FRAMES  = 11;
+const WEAR_HOURS    = 3;          // "what to wear" looks at now through the next 3 hours         // 50 minutes of 5-minute scans
 const VIEWS = ["hourly", "week", "max"];
 
 const store = {
@@ -414,7 +424,7 @@ function initialLocation() {
   return store.get("loc", null);
 }
 
-const cacheKey = () => `${state.loc.lat},${state.loc.lon},${state.units}`;
+const cacheKey = () => `v2,${state.loc.lat},${state.loc.lon},${state.units}`;   // bump v when API fields change
 
 function setLocation(loc) {
   state.loc = loc;
@@ -474,7 +484,7 @@ async function loadWeather() {
   const { lat, lon } = state.loc, key = cacheKey();
   const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon +
     "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,dew_point_2m,uv_index" +
-    "&hourly=temperature_2m,precipitation_probability,snowfall,weather_code,is_day,wind_gusts_10m&forecast_hours=48" +
+    "&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,snowfall,snow_depth,weather_code,is_day,wind_speed_10m,wind_gusts_10m&past_hours=3&forecast_hours=48" +
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max" +
     "&timezone=auto&timeformat=unixtime&forecast_days=16" + U().qs;
   try {
@@ -565,7 +575,66 @@ function renderNow(w) {
     [sunLabel, fTime(sunT)],
   ];
   $("stats").innerHTML = stats.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  $("wear").innerHTML = wearHTML(whatToWear(w));
   $("headsup").innerHTML = headsUp(w);
+}
+
+// Layered clothing advice for heading out: looks at now through the next WEAR_HOURS hours.
+//   Shell:      Gore-Tex if precipitation is expected, Soft Shell if it's only possible or windy, else None
+//   Insulation: by the coldest "feels like" temperature in the window
+//   Pants:      Shell when moderate rain (≥ 0.10 in/hr) or heavier precipitation is expected
+//   Footwear:   Gore-Tex if it's wet out, the ground is still wet from recent rain, or there's snow on the ground
+function whatToWear(w) {
+  const h = w.hourly, c = w.current, us = state.units === "us";
+  const i0 = hourStart(), hours = [];
+  for (let i = i0; i < Math.min(i0 + WEAR_HOURS + 1, h.time.length); i++) hours.push(i);
+
+  const LIGHT = us ? 0.01 : 0.25, MODERATE = us ? 0.10 : 2.5;        // precipitation per hour (in / mm)
+  const WINDY = us ? 15 : 24, SNOW_ON_GROUND = us ? 0.05 : 0.015;    // mph or km/h; snow depth in ft or m
+  const MODERATE_CODES = [63, 65, 66, 67, 73, 75, 81, 82, 86, 95, 96, 99];
+
+  const chance = (i) => h.precipitation_probability[i] ?? 0;
+  const likely = hours.filter((i) => chance(i) >= 40);
+  const nowRate = c.precipitation * (3600 / (c.interval || 900));    // current value covers the last 15 minutes
+  const peak = Math.max(nowRate, ...likely.map((i) => h.precipitation[i] ?? 0));
+  const codes = [c.weather_code, ...likely.map((i) => h.weather_code[i])];
+  const wetNow = peak >= LIGHT || codes.some((k) => k >= 51);
+  const moderate = peak >= MODERATE || codes.some((k) => MODERATE_CODES.includes(k));
+  const possible = hours.some((i) => chance(i) >= 25 && h.weather_code[i] >= 51);
+  const pastRain = h.precipitation.slice(Math.max(0, i0 - 3), i0).reduce((a, b) => a + (b || 0), 0);
+  const groundWet = pastRain >= LIGHT;
+  const snowGround = (h.snow_depth[i0] ?? 0) >= SNOW_ON_GROUND;
+  const wind = Math.max(c.wind_speed_10m, ...hours.map((i) => h.wind_speed_10m[i] ?? 0));
+  const feels = hours.map((i) => h.apparent_temperature[i]).concat(c.apparent_temperature);
+  const fMin = Math.min(...feels), fMax = Math.max(...feels);
+  const F = us ? fMin : fMin * 9 / 5 + 32;
+  const snowy = codes.some((k) => [71, 73, 75, 77, 85, 86].includes(k));
+
+  return {
+    shell: wetNow ? "Gore-Tex" : possible || wind >= WINDY ? "Soft Shell" : "None",
+    insulation: F >= 60 ? "None" : F >= 48 ? "Light" : F >= 32 ? "Medium" : "Heavy",
+    extras: F < 32 ? "hat & gloves" : "",
+    pants: moderate ? "Shell" : "None",
+    feet: wetNow || groundWet || snowGround ? "Gore-Tex" : "Light",
+    why: [
+      `Next ${WEAR_HOURS} hrs: feels ${r(fMin)}°${r(fMax) !== r(fMin) ? "–" + r(fMax) + "°" : ""}`,
+      wetNow && `${snowy ? "snow" : "rain"} up to ${peak.toFixed(us ? 2 : 1)} ${us ? "in" : "mm"}/hr`,
+      !wetNow && possible && "showers possible",
+      wind >= WINDY && `wind ${r(wind)} ${U().wind}`,
+      !wetNow && groundWet && "ground still wet",
+      snowGround && "snow on the ground",
+    ].filter(Boolean).join(" · "),
+  };
+}
+
+function wearHTML(x) {
+  const tile = (k, v, cls, extra = "") =>
+    `<div class="w ${cls}"><div class="k">${k}</div><div class="v">${v}</div>${extra ? `<div class="x">${extra}</div>` : ""}</div>`;
+  return tile("Shell", x.shell, x.shell === "None" ? "off" : x.shell === "Gore-Tex" ? "wet" : "") +
+    tile("Insulation", x.insulation, x.insulation === "None" ? "off" : "", x.extras) +
+    tile("Pants", x.pants, x.pants === "None" ? "off" : "wet") +
+    tile("Footwear", x.feet, x.feet === "Gore-Tex" ? "wet" : "") +
+    `<div class="why">${x.why}</div>`;
 }
 
 function todayIndex() {
@@ -621,11 +690,7 @@ function headsUp(w) {
   const gust = Math.max(...h.wind_gusts_10m.slice(i0, i0 + 12));
   if (gust >= (state.units === "us" ? 35 : 55)) notes.push(`Gusts to <strong>${r(gust)} ${u.wind}</strong>`);
 
-  // what to wear
-  const feels = w.current.apparent_temperature, f = state.units === "us" ? feels : feels * 9 / 5 + 32;
-  const wear = f < 15 ? "Heavy coat, hat & gloves" : f < 35 ? "Winter coat" : f < 50 ? "Jacket" : f < 62 ? "Light layer" : null;
-  if (wear) notes.unshift(`<strong>${wear}</strong>`);
-  if (!nowWet && notes.every((n) => !/likely|Wet/.test(n)) && w.daily.precipitation_probability_max[todayIndex()] < 25 && !wear)
+  if (!nowWet && notes.every((n) => !/likely|Wet/.test(n)) && w.daily.precipitation_probability_max[todayIndex()] < 25)
     notes.push("No umbrella needed today");
 
   return notes.join(" · ");
