@@ -965,6 +965,9 @@ const radar = {
       maxZoom: 16,
     }).addTo(this.map);
     // labels go above the radar so city names stay readable
+    // Radar frames get their own pane so they can be softened without blurring the map or labels.
+    this.map.createPane("radar").style.zIndex = 300;
+    this.map.getPane("radar").style.pointerEvents = "none";
     this.map.createPane("labels").style.zIndex = 450;
     this.map.getPane("labels").style.pointerEvents = "none";
     L.tileLayer(esri("World_Dark_Gray_Reference"), { pane: "labels", maxZoom: 16 }).addTo(this.map);
@@ -990,6 +993,13 @@ const radar = {
       $("zoom-out").disabled = this.map.getZoom() <= this.map.getMinZoom();
     };
     this.map.on("zoomend", syncZoom);
+    // Past the radar's native resolution the scan's ~0.5 km cells turn blocky; blur scales with the enlargement.
+    const soften = () => {
+      const z = this.map.getZoom();
+      this.map.getPane("radar").style.filter = z >= 8 ? `blur(${(0.6 * 2 ** (z - 8)).toFixed(1)}px)` : "";
+    };
+    this.map.on("zoomend", soften);
+    soften();
     syncZoom();
     new ResizeObserver(() => this.map.invalidateSize()).observe($("map"));
     this.load();
@@ -1014,7 +1024,7 @@ const radar = {
 
   addLayer(f) {
     if (!this.layers.has(f.url))
-      this.layers.set(f.url, L.tileLayer(f.url, { opacity: 0, maxNativeZoom: f.maxZoom, maxZoom: 10, zIndex: 10, attribution: f.attribution }).addTo(this.map));
+      this.layers.set(f.url, L.tileLayer(f.url, { pane: "radar", opacity: 0, maxNativeZoom: f.maxZoom, maxZoom: 10, zIndex: 10, attribution: f.attribution }).addTo(this.map));
     return this.layers.get(f.url);
   },
 
@@ -1056,7 +1066,7 @@ const radar = {
     return Array.from({ length: RADAR_FRAMES }, (_, k) => latest - (RADAR_FRAMES - 1 - k) * step).map((t) => ({
       time: t,
       url: `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::USCOMP-N0Q-${stamp(t)}/{z}/{x}/{y}.png`,
-      maxZoom: 10,
+      maxZoom: 8,   // ≈ native resolution; above this the browser's smooth upscaling beats the server's blocky pixels
       attribution: 'Radar &copy; <a href="https://mesonet.agron.iastate.edu/">IEM</a>',
     }));
   },
