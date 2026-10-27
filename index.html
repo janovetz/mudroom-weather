@@ -200,6 +200,25 @@
   .slider .lbl { display: flex; gap: 8px; font-size: 0.8rem; color: var(--muted); }
   .slider .lbl b { margin-left: auto; color: var(--text); font-weight: 600; white-space: nowrap; }
   .slider input[type=range] { width: 100%; height: 28px; margin: 2px 0 0; accent-color: var(--accent); touch-action: pan-y; }
+  .multi { position: relative; height: 36px; margin-top: 4px; }
+  .multi-track { position: absolute; left: 11px; right: 11px; top: 50%; height: 8px; margin-top: -4px; border-radius: 4px; }
+  .multi input[type=range] {
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
+    -webkit-appearance: none; appearance: none; background: none; pointer-events: none;
+  }
+  .multi input[type=range]::-webkit-slider-runnable-track { background: none; border: 0; }
+  .multi input[type=range]::-moz-range-track { background: none; border: 0; }
+  .multi input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; pointer-events: auto; cursor: grab;
+    width: 22px; height: 22px; border-radius: 50%; background: var(--text); border: 4px solid var(--c); box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  }
+  .multi input[type=range]::-moz-range-thumb {
+    pointer-events: auto; cursor: grab;
+    width: 14px; height: 14px; border-radius: 50%; background: var(--text); border: 4px solid var(--c); box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  }
+  .multi-read { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+  .multi-read span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--c); margin-right: 5px; }
+  .multi-read b { color: var(--text); font-weight: 600; }
   @media (max-width: 760px) { .settings-top, .wear-groups { grid-template-columns: 1fr; } }
   dialog::backdrop { background: rgba(0,0,0,.6); }
   .settings { padding: 20px; display: grid; gap: 16px; user-select: text; }
@@ -376,7 +395,7 @@ const VIEWS = ["hourly", "week", "max"];
 // What-to-wear set points, always stored in °F / inches / mph and converted for display.
 const WEAR_DEFAULTS = {
   hatRate: 0.02,     // Gore-Tex hat when expected precipitation ≥ this (in/hr)
-  capUV: 3,          // cap when the UV index reaches this
+  capUV: 5,          // cap when the UV index reaches this
   likely: 40,        // % chance at which forecast precipitation counts as "expected"
   goreRate: 0.01,    // Gore-Tex shell when expected precipitation ≥ this (in/hr)
   softChance: 25,    // Soft Shell when showers are this likely (%)
@@ -385,12 +404,13 @@ const WEAR_DEFAULTS = {
   medium: 48,        //             Medium below this
   heavy: 32,         //             Heavy (includes gloves) below this
   pantsRate: 0.10,   // shell pants when expected precipitation ≥ this (in/hr)
-  wetGround: 0.01,   // Gore-Tex footwear when the past 3 hours brought ≥ this (in)
+  feetWet: 50,       // Gore-Tex footwear when the chance of wet feet (ground or sky) reaches this (%)
+  dryHalf: 4,        // past rain's effect on the ground halves every this many hours
   walk: 1,           // time outside, starting now (1, 2 or 3 hrs) — picked on the main panel
 };
 const WEAR_SLIDERS = [
   ["Headwear", [
-    ["hatRate", "Gore-Tex when rain/snow ≥", 0.01, 0.20, 0.01, "rate"],
+    ["hatRate", "Gore-Tex when drizzle ≥", 0.01, 0.20, 0.01, "rate"],
     ["capUV", "Cap when UV index ≥", 1, 11, 1, "uv"],
   ]],
   ["Shell", [
@@ -399,20 +419,27 @@ const WEAR_SLIDERS = [
     ["softWind", "Soft Shell when wind ≥", 5, 40, 1, "wind"],
   ]],
   ["Insulation", [
-    ["light", "Light below", -10, 80, 1, "temp"],
-    ["medium", "Medium below", -10, 80, 1, "temp"],
-    ["heavy", "Heavy below", -10, 80, 1, "temp"],
+    // [keys, labels, min, max, step, kind, colors] — one bar, one handle per key; warmer than the last handle = None
+    [["heavy", "medium", "light"], ["Heavy + insulated hat", "Medium", "Light"], -10, 80, 1, "temp", ["#6c8cff", "#4fc3f7", "#4dd0a8", "#3a4756"]],
   ]],
   ["Shell pants", [
     ["pantsRate", "Shell pants when rain/snow ≥", 0.02, 0.50, 0.01, "rate"],
   ]],
   ["Footwear", [
-    ["wetGround", "Gore-Tex when past 3 hrs brought ≥", 0.01, 0.25, 0.01, "amount"],
+    ["feetWet", "Gore-Tex when wet-feet chance ≥", 10, 90, 5, "pct"],
+    ["dryHalf", "Ground dries by half every", 1, 12, 1, "hours"],
   ]],
   ["Forecast", [
     ["likely", "Count rain/snow as expected at chance ≥", 10, 90, 5, "pct"],
   ]],
 ];
+
+// One-time updates to saved what-to-wear settings when a default changes.
+function migrateWear(w) {
+  if ((w.v ?? 1) < 2 && w.capUV === 3) w.capUV = 5;   // cap-for-sun default raised from UV 3 to 5
+  w.v = 2;
+  return w;
+}
 
 const store = {
   get(k, d) { try { const v = localStorage.getItem("wx." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -423,7 +450,7 @@ const state = {
   loc: null,                       // {lat, lon, name}
   units: store.get("units", "us"),
   dim: store.get("dim", true),
-  wear: { ...WEAR_DEFAULTS, ...store.get("wear", {}) },
+  wear: migrateWear({ ...WEAR_DEFAULTS, ...store.get("wear", {}) }),
   walks: [1, 2, 3],
   view: VIEWS.includes(store.get("view")) ? store.get("view") : "hourly",
   wx: null,
@@ -576,7 +603,7 @@ async function loadWeather() {
   const { lat, lon } = state.loc, key = cacheKey();
   const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon +
     "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,dew_point_2m,uv_index" +
-    "&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,snowfall,snow_depth,weather_code,is_day,uv_index,wind_speed_10m,wind_gusts_10m&past_hours=4&forecast_hours=48" +
+    "&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,snowfall,snow_depth,weather_code,is_day,uv_index,wind_speed_10m,wind_gusts_10m&past_hours=13&forecast_hours=48" +
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max" +
     "&timezone=auto&timeformat=unixtime&forecast_days=16" + U().qs;
   try {
@@ -674,12 +701,15 @@ function renderNow(w) {
 // Layered clothing advice for the time outside: now through now + walk hours (set points in state.wear).
 // Open-Meteo hourly precipitation, chance and weather code describe the hour *ending* at each timestamp;
 // temperature, wind and UV are values at the timestamp.
-//   Headwear:   Gore-Tex in steadier rain/snow, a cap for sun or light/possible showers, else None
+//   Headwear:   Gore-Tex for anything beyond light drizzle; otherwise Insulated with Heavy insulation;
+//               otherwise Cap for Medium insulation, sun, light drizzle or possible showers; else None
 //   Shell:      Gore-Tex if precipitation is expected, Soft Shell if showers are possible or it's windy, else None
 //   Insulation: by the coldest "feels like" temperature in the window
 //   Pants:      Shell when moderate rain or heavier is expected (rate set point, or a moderate+ forecast code)
 //   Visibility: Hi-Viz when any part of the time out falls between sunset and sunrise
-//   Footwear:   Gore-Tex if it's wet out, the ground is still wet from recent rain, or there's snow on the ground
+//   Footwear:   Gore-Tex if it's wet out, there's snow on the ground, or the wet-feet chance reaches its set point:
+//               1 − (1 − ground)(1 − sky), where ground = last 12 hrs of rain (fading by half every dryHalf hrs)
+//               relative to a soaking 0.10 in, and sky = the highest hourly rain chance during the time out
 function whatToWear(w) {
   const h = w.hourly, c = w.current, us = state.units === "us", S = state.wear;
   // normalize to °F / inches / mph
@@ -692,7 +722,7 @@ function whatToWear(w) {
   const now = Date.now() / 1000, end = now + S.walk * 3600, all = h.time.map((_, i) => i);
   const hours = all.filter((i) => h.time[i] > now - 3600 && h.time[i] <= end);        // samples around the time out
   const accum = all.filter((i) => h.time[i] > now && h.time[i] < end + 3600);         // hours overlapping the time out
-  const past = all.filter((i) => h.time[i] > now - 3 * 3600 && h.time[i] <= now);    // the last three full hours
+  const past = all.filter((i) => h.time[i] > now - 12 * 3600 && h.time[i] <= now);   // the last twelve full hours
 
   const chance = (i) => h.precipitation_probability[i] ?? 0;
   const likely = accum.filter((i) => chance(i) >= S.likely);
@@ -703,13 +733,18 @@ function whatToWear(w) {
   const wetNow = peak >= S.goreRate || c.weather_code >= 51;
   const moderate = peak >= S.pantsRate || codes.some((k) => MODERATE_CODES.includes(k));
   const possible = accum.some((i) => chance(i) >= S.softChance && h.weather_code[i] >= 51);
-  const pastRain = r2(past.reduce((a, i) => a + IN(h.precipitation[i] || 0), 0));
-  const groundWet = pastRain >= S.wetGround;
+  const SOAKED = 0.10;   // inches of recent rain that leave the ground fully wet
+  const faded = past.reduce((a, i) => a + IN(h.precipitation[i] || 0) * 0.5 ** ((now - h.time[i]) / 3600 / S.dryHalf), 0);
+  const ground = Math.min(1, faded / SOAKED);
+  const sky = Math.max(0, ...accum.map(chance)) / 100;
+  const wetFeet = r((1 - (1 - ground) * (1 - sky)) * 100);   // %
   const snowGround = FT(h.snow_depth[hours[0]] ?? 0) >= 0.05;
   const wind = MPH(Math.max(c.wind_speed_10m, ...hours.map((i) => h.wind_speed_10m[i] ?? 0)));
   const feels = hours.map((i) => h.apparent_temperature[i]).concat(c.apparent_temperature);
   const fMin = Math.min(...feels), fMax = Math.max(...feels), coldest = F(fMin);
   const snowy = codes.some((k) => [71, 73, 75, 77, 85, 86].includes(k));
+  const insulation = coldest >= S.light ? "None" : coldest >= S.medium ? "Light" : coldest >= S.heavy ? "Medium" : "Heavy";
+  const beyondDrizzle = codes.some((k) => k > 51);   // 51 = light drizzle; anything above is heavier drizzle, rain, snow or storms
   const uv = Math.max(c.uv_index ?? 0, ...hours.map((i) => h.uv_index?.[i] ?? 0));
 
   // Darkness: before that day's sunrise or after its sunset. The time out (≤ 3 hrs) can't span a whole day,
@@ -724,11 +759,13 @@ function whatToWear(w) {
   const nextSunset = d.sunset.find((t) => t > now);
 
   return {
-    head: peak >= S.hatRate ? "Gore-Tex" : uv >= S.capUV || wetNow || possible ? "Cap" : "None",
+    head: peak >= S.hatRate || beyondDrizzle ? "Gore-Tex"
+      : insulation === "Heavy" ? "Insulated"
+      : insulation === "Medium" || uv >= S.capUV || wetNow || possible ? "Cap" : "None",
     shell: wetNow ? "Gore-Tex" : possible || wind >= S.softWind ? "Soft Shell" : "None",
-    insulation: coldest >= S.light ? "None" : coldest >= S.medium ? "Light" : coldest >= S.heavy ? "Medium" : "Heavy",
+    insulation,
     pants: moderate ? "Shell" : "None",
-    feet: wetNow || groundWet || snowGround ? "Gore-Tex" : "Light",
+    feet: wetNow || snowGround || wetFeet >= S.feetWet ? "Gore-Tex" : "Light",
     viz: dark ? "Hi-Viz" : null,
     why: [
       `Feels ${r(fMin)}°${r(fMax) !== r(fMin) ? "–" + r(fMax) + "°" : ""}`,
@@ -736,7 +773,7 @@ function whatToWear(w) {
       !wetNow && possible && "showers possible",
       wind >= S.softWind && `wind ${fmtWear(wind, "wind")}`,
       uv >= S.capUV && `UV ${r(uv)}`,
-      !wetNow && groundWet && "ground still wet",
+      !wetNow && wetFeet >= 10 && `wet feet ${wetFeet}%${ground >= 0.1 ? ` (ground ${r(ground * 100)}%)` : ""}`,
       snowGround && "snow on the ground",
       dark && (darkNow ? "dark out" : `dark at ${fTime(nextSunset)}`),
     ].filter(Boolean).join(" · "),
@@ -1113,16 +1150,33 @@ function syncSettingsUI() {
 
 function buildWearSliders() {
   $("wear-sliders").innerHTML = WEAR_SLIDERS.map(([group, rows]) => `<div class="wear-group"><h5>${group}</h5>` +
-    rows.map(([key, label, min, max, step, kind]) => `<div class="slider">
-      <div class="lbl"><span>${label}</span><b id="wv-${key}"></b></div>
-      <input type="range" data-key="${key}" data-kind="${kind}" min="${min}" max="${max}" step="${step}" aria-label="${label}">
-    </div>`).join("") + "</div>").join("");
+    rows.map(([key, label, min, max, step, kind, colors]) => Array.isArray(key)
+      ? `<div class="slider">
+          <div class="multi" data-min="${min}" data-max="${max}" data-colors="${colors.join(",")}">
+            <div class="multi-track"></div>
+            ${key.map((k, i) => `<input type="range" data-key="${k}" data-kind="${kind}" min="${min}" max="${max}" step="${step}"
+                aria-label="${label[i]} below" style="--c:${colors[i]}">`).join("")}
+          </div>
+          <div class="multi-read">${key.map((k, i) => `<span style="--c:${colors[i]}">${label[i]} below <b id="wv-${k}"></b></span>`).join("")}</div>
+        </div>`
+      : `<div class="slider">
+          <div class="lbl"><span>${label}</span><b id="wv-${key}"></b></div>
+          <input type="range" data-key="${key}" data-kind="${kind}" min="${min}" max="${max}" step="${step}" aria-label="${label}">
+        </div>`).join("") + "</div>").join("");
 }
 
 function syncWearSliders() {
   document.querySelectorAll("#wear-sliders input").forEach((el) => {
     el.value = state.wear[el.dataset.key];
     $("wv-" + el.dataset.key).textContent = fmtWear(state.wear[el.dataset.key], el.dataset.kind);
+  });
+  // Multi-handle bars: color each band between handles
+  document.querySelectorAll("#wear-sliders .multi").forEach((m) => {
+    const min = +m.dataset.min, max = +m.dataset.max, colors = m.dataset.colors.split(",");
+    const stops = [...m.querySelectorAll("input")].map((el) => ((+el.value - min) / (max - min)) * 100);
+    let from = 0;
+    const bands = stops.concat(100).map((to, i) => { const b = `${colors[i]} ${from}% ${to}%`; from = to; return b; });
+    m.querySelector(".multi-track").style.background = `linear-gradient(to right, ${bands.join(", ")})`;
   });
 }
 
