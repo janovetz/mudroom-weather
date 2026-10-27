@@ -110,6 +110,8 @@
   .wear .v { font-size: 0.98rem; font-weight: 600; margin-top: 2px; line-height: 1.2; }
   .wear .w.off .v { color: var(--faint); font-weight: 400; }
   .wear .w.wet .v { color: var(--rain); }
+  .wear .w.ice { background: color-mix(in srgb, #a8e4ff 14%, var(--panel-2)); }
+  .wear .w.ice .v { color: #a8e4ff; }
   .wear-block { display: grid; gap: 6px; }
   .wear-head { display: flex; align-items: center; gap: 8px; }
   .wear-head .lbl { font-size: 0.68rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
@@ -407,6 +409,8 @@ const WEAR_DEFAULTS = {
   pantsRate: 0.10,   // shell pants when expected precipitation ≥ this (in/hr)
   feetWet: 50,       // Gore-Tex footwear when the chance of wet feet (ground or sky) reaches this (%)
   dryHalf: 4,        // past rain's effect on the ground halves every this many hours
+  iceTemp: 32,       // Yak Trax when the ground surface is at or below this (°F) and there's moisture to freeze
+  dimMins: 15,       // Hi-Viz from this many minutes before sunset until this many after sunrise
   walk: 1,           // time outside, starting now (1, 2 or 3 hrs) — picked on the main panel
 };
 const WEAR_SLIDERS = [
@@ -429,6 +433,10 @@ const WEAR_SLIDERS = [
   ["Footwear", [
     ["feetWet", "Gore-Tex when wet-feet chance ≥", 10, 90, 5, "pct"],
     ["dryHalf", "Ground dries by half every", 1, 12, 1, "hours"],
+    ["iceTemp", "Yak Trax when ground surface ≤", 26, 38, 1, "temp"],
+  ]],
+  ["Visibility", [
+    ["dimMins", "Hi-Viz from before sunset / after sunrise", 0, 60, 5, "mins"],
   ]],
   ["Forecast", [
     ["likely", "Count rain/snow as expected at chance ≥", 10, 90, 5, "pct"],
@@ -545,7 +553,7 @@ function initialLocation() {
   return store.get("loc", null);
 }
 
-const cacheKey = () => `v3,${state.loc.lat},${state.loc.lon},${state.units}`;   // bump v when API fields change
+const cacheKey = () => `v4,${state.loc.lat},${state.loc.lon},${state.units}`;   // bump v when API fields change
 
 function setLocation(loc) {
   state.loc = loc;
@@ -607,7 +615,7 @@ async function loadWeather() {
   const { lat, lon } = state.loc, key = cacheKey();
   const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon +
     "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,dew_point_2m,uv_index" +
-    "&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,snowfall,snow_depth,weather_code,is_day,uv_index,wind_speed_10m,wind_gusts_10m&past_hours=13&forecast_hours=48" +
+    "&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,snowfall,snow_depth,weather_code,is_day,uv_index,wind_speed_10m,wind_gusts_10m,soil_temperature_0cm&past_hours=13&forecast_hours=48" +
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max" +
     "&timezone=auto&timeformat=unixtime&forecast_days=16" + U().qs;
   try {
@@ -730,10 +738,13 @@ function renderNow(w) {
 //   Shell:      Gore-Tex if precipitation is expected, Soft Shell if showers are possible or it's windy, else None
 //   Insulation: by the coldest "feels like" temperature in the window
 //   Pants:      Shell when moderate rain or heavier is expected (rate set point, or a moderate+ forecast code)
-//   Visibility: Hi-Viz when any part of the time out falls between sunset and sunrise
+//   Visibility: Hi-Viz when any part of the time out falls in low light: from dimMins before sunset
+//               until dimMins after sunrise
 //   Footwear:   Gore-Tex if it's wet out, there's snow on the ground, or the wet-feet chance reaches its set point:
 //               1 − (1 − ground)(1 − sky), where ground = last 12 hrs of rain (fading by half every dryHalf hrs)
-//               relative to a soaking 0.10 in, and sky = the highest hourly rain chance during the time out
+//               relative to a soaking 0.10 in, and sky = the highest hourly rain chance during the time out.
+//               Yak Trax outrank both: freezing rain/drizzle, or a ground surface at/below iceTemp with snow on
+//               the ground, snow expected, or ground still wet (ground ≥ 25%)
 function whatToWear(w) {
   const h = w.hourly, c = w.current, us = state.units === "us", S = state.wear;
   // normalize to °F / inches / mph
@@ -769,15 +780,19 @@ function whatToWear(w) {
   const snowy = codes.some((k) => [71, 73, 75, 77, 85, 86].includes(k));
   const insulation = coldest >= S.light ? "None" : coldest >= S.medium ? "Light" : coldest >= S.heavy ? "Medium" : "Heavy";
   const beyondDrizzle = codes.some((k) => k > 51);   // 51 = light drizzle; anything above is heavier drizzle, rain, snow or storms
+  const surface = Math.min(...hours.map((i) => F(h.soil_temperature_0cm?.[i] ?? h.temperature_2m[i])));
+  const freezingPrecip = codes.some((k) => [56, 57, 66, 67].includes(k));
+  const icy = freezingPrecip || (surface <= S.iceTemp && (snowGround || snowy || ground >= 0.25));
   const uv = Math.max(c.uv_index ?? 0, ...hours.map((i) => h.uv_index?.[i] ?? 0));
 
   // Darkness: before that day's sunrise or after its sunset. The time out (≤ 3 hrs) can't span a whole day,
   // so checking its start and end is enough.
   const d = w.daily;
+  const dim = S.dimMins * 60;
   const isDark = (t) => {
     let i = 0;
     while (i + 1 < d.time.length && d.time[i + 1] <= t) i++;
-    return t < d.sunrise[i] || t >= d.sunset[i];
+    return t < d.sunrise[i] + dim || t >= d.sunset[i] - dim;
   };
   const darkNow = isDark(now), dark = darkNow || isDark(end);
   const nextSunset = d.sunset.find((t) => t > now);
@@ -789,7 +804,7 @@ function whatToWear(w) {
     shell: wetNow ? "Gore-Tex" : possible || wind >= S.softWind ? "Soft Shell" : "None",
     insulation,
     pants: moderate ? "Shell" : "None",
-    feet: wetNow || snowGround || wetFeet >= S.feetWet ? "Gore-Tex" : "Light",
+    feet: icy ? "Yak Trax" : wetNow || snowGround || wetFeet >= S.feetWet ? "Gore-Tex" : "Light",
     viz: dark ? "Hi-Viz" : null,
     why: [
       `Feels ${r(fMin)}°${r(fMax) !== r(fMin) ? "–" + r(fMax) + "°" : ""}`,
@@ -797,9 +812,10 @@ function whatToWear(w) {
       !wetNow && possible && "showers possible",
       wind >= S.softWind && `wind ${fmtWear(wind, "wind")}`,
       uv >= S.capUV && `UV ${r(uv)}`,
+      icy && (freezingPrecip ? "freezing rain — icy" : `ice likely (ground ${fmtWear(surface, "temp")})`),
       !wetNow && wetFeet >= 10 && `wet feet ${wetFeet}%${ground >= 0.1 ? ` (ground ${r(ground * 100)}%)` : ""}`,
       snowGround && "snow on the ground",
-      dark && (darkNow ? "dark out" : `dark at ${fTime(nextSunset)}`),
+      dark && (darkNow ? "low light" : `low light at ${fTime(nextSunset - dim)}`),
     ].filter(Boolean).join(" · "),
   };
 }
@@ -814,6 +830,7 @@ function fmtWear(v, kind) {
     case "wind": return us ? `${r(v)} mph` : `${r(v * 1.609)} km/h`;
     case "pct": return `${v}%`;
     case "uv": return `${v}`;
+    case "mins": return `${v} min`;
     case "hours": return v < 1 ? `${r(v * 60)} min` : `${v} hr${v > 1 ? "s" : ""}`;
   }
 }
@@ -852,7 +869,7 @@ function wearHTML(x) {
     tile("Shell", x.shell, x.shell === "None" ? "off" : x.shell === "Gore-Tex" ? "wet" : "") +
     tile("Insulation", x.insulation, x.insulation === "None" ? "off" : "") +
     tile("Pants", x.pants, x.pants === "None" ? "off" : "wet") +
-    tile("Footwear", x.feet, x.feet === "Gore-Tex" ? "wet" : "") +
+    tile("Footwear", x.feet, x.feet === "Yak Trax" ? "ice" : x.feet === "Gore-Tex" ? "wet" : "") +
     `<div class="w viz ${x.viz ? "on" : ""}" title="Hi-Viz" aria-label="${x.viz ? "Wear hi-viz" : "Hi-viz not needed"}">${vest(!!x.viz)}</div>` +
     `<div class="why">${x.why}</div>`;
 }
