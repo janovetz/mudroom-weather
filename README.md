@@ -1,4 +1,4 @@
-# No-Ad Weather
+# Mudroom Weather
 
 A fast, ad-free, single-page weather display built for an always-on tablet (tuned for 1440×960 landscape, works on phones).
 
@@ -15,7 +15,7 @@ No build step, no API keys: everything is in `index.html`.
 Nothing is hard-coded. Open the page with your coordinates and it remembers them:
 
 ```
-https://janovetz.github.io/no-ad-weather/?lat=45.00&lon=-122.00&name=Home
+https://janovetz.github.io/mudroom-weather/?lat=45.00&lon=-122.00&name=Home
 ```
 
 Or use the ⚙ settings to search for a town or use the device's location.
