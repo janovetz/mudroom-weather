@@ -1,0 +1,991 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1016">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Weather">
+<title>Mudroom Weather</title>
+<link rel="preconnect" href="https://api.open-meteo.com" crossorigin>
+<link rel="preconnect" href="https://api.weather.gov" crossorigin>
+<link rel="preconnect" href="https://mesonet.agron.iastate.edu">
+<link rel="preconnect" href="https://mesonet.agron.iastate.edu" crossorigin>
+<link rel="preconnect" href="https://server.arcgisonline.com">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --bg: #0b1016;
+    --panel: #121a23;
+    --panel-2: #18222e;
+    --line: #233140;
+    --text: #e8eef4;
+    --muted: #8a9aab;
+    --faint: #5b6b7c;
+    --accent: #6cc4ff;
+    --sun: #ffc94a;
+    --rain: #4ea8ff;
+    --snow: #dbe9ff;
+    --warn: #ff8a3d;
+    --danger: #ff4d5e;
+    --radius: 18px;
+    --gap: 12px;
+    font-size: clamp(14px, 0.9vw + 6px, 20px);   /* ≈19px at 1440 wide */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    user-select: none;
+    transition: filter 1.5s ease;
+  }
+  body.dim { filter: brightness(0.55); }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+  /* Column flex: header / alerts / main (fills what's left) / forecast. Hidden alerts take no space or gap. */
+  .app {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
+    padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+
+  /* ---------- header ---------- */
+  header { display: flex; align-items: center; gap: 16px; }
+  .place { font-size: 1.1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status { font-size: 0.72rem; color: var(--faint); white-space: nowrap; }
+  .status.stale { color: var(--warn); }
+  .clock { margin-left: auto; text-align: right; line-height: 1.1; }
+  .clock .time { font-size: 1.5rem; font-weight: 300; letter-spacing: -0.02em; }
+  .clock .date { font-size: 0.75rem; color: var(--muted); }
+  .icon-btn { width: 2.3rem; height: 2.3rem; border-radius: 50%; display: grid; place-items: center; color: var(--muted); background: var(--panel); }
+  .icon-btn svg { width: 1.15rem; height: 1.15rem; }
+
+  /* ---------- alerts ---------- */
+  .alerts:empty { display: none; }
+  .alerts { display: grid; gap: 8px; }
+  .alert {
+    display: block; width: 100%; text-align: left;
+    border-radius: 12px; padding: 9px 14px;
+    background: color-mix(in srgb, var(--warn) 18%, var(--panel));
+    border-left: 5px solid var(--warn);
+  }
+  .alert.severe { background: color-mix(in srgb, var(--danger) 22%, var(--panel)); border-left-color: var(--danger); }
+  .alert b { font-weight: 650; }
+  .alert span { color: var(--muted); font-size: 0.85rem; margin-left: 8px; }
+  .alert p { margin: 8px 0 0; font-size: 0.85rem; line-height: 1.45; white-space: pre-wrap; display: none; max-height: 40vh; overflow: auto; }
+  .alert.open p { display: block; }
+
+  /* ---------- main: conditions 1/3, radar 2/3 ---------- */
+  .main { flex: 1 1 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--gap); min-height: 0; }
+  header, .alerts, .forecast { flex: none; }
+  .card { background: var(--panel); border-radius: var(--radius); padding: 18px 20px; min-height: 0; }
+
+  .now { display: flex; flex-direction: column; gap: 1rem; overflow: hidden; }
+  .now-top { display: flex; align-items: center; gap: 0.6rem; }
+  .now-icon { width: 5.6rem; height: 5.6rem; flex: none; }
+  .now-icon svg { width: 100%; height: 100%; display: block; }
+  .now-temp { font-size: 5.6rem; font-weight: 200; line-height: 0.9; letter-spacing: -0.04em; }
+  .now-temp sup { font-size: 0.38em; font-weight: 300; vertical-align: 1em; margin-left: 2px; color: var(--muted); }
+  .now-desc { font-size: 1.3rem; font-weight: 500; }
+  .now-sub { color: var(--muted); font-size: 0.95rem; margin-top: 3px; }
+  .headsup { font-size: 0.92rem; line-height: 1.45; padding: 10px 14px; border-radius: 12px; background: var(--panel-2); }
+  .headsup:empty { display: none; }
+  .headsup strong { color: var(--accent); font-weight: 600; }
+  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+  .stat .k { font-size: 0.68rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
+  .stat .v { font-size: 1.02rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nws { font-size: 0.86rem; color: var(--muted); line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; }
+  .nws:empty { display: none; }
+  .nws b { color: var(--text); font-weight: 600; }
+
+  /* ---------- radar ---------- */
+  .radar { position: relative; padding: 0; overflow: hidden; }
+  #map { position: absolute; inset: 0; background: #0d141c; cursor: pointer; }
+  .leaflet-container { background: #0d141c; font: inherit; }
+  .leaflet-control-attribution { background: rgba(11,16,22,.7) !important; color: var(--faint) !important; font-size: 9px !important; }
+  .leaflet-control-attribution a { color: var(--muted) !important; }
+  .overlay { position: absolute; z-index: 500; background: rgba(11,16,22,.78); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-radius: 12px; }
+  .radar-bar { left: 12px; bottom: 12px; display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; width: min(420px, calc(100% - 24px)); }
+  .radar-bar .icon-btn { width: 2rem; height: 2rem; background: transparent; color: var(--text); }
+  .radar-time { font-size: 0.85rem; min-width: 4.8em; }
+  .radar-track { flex: 1; display: flex; gap: 3px; height: 5px; }
+  .radar-track i { flex: 1; border-radius: 3px; background: var(--line); }
+  .radar-track i.on { background: var(--accent); }
+  .radar-title { top: 12px; left: 12px; padding: 5px 10px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); pointer-events: none; }
+  .radar-title .full { display: none; font-size: 1rem; letter-spacing: 0; text-transform: none; color: var(--text); }
+  .radar-title .full b { font-size: 1.6rem; font-weight: 300; margin-right: 8px; }
+  .radar-zoom { top: 12px; right: 12px; display: flex; flex-direction: column; padding: 4px; gap: 2px; }
+  .radar-zoom button { width: 3rem; height: 3rem; border-radius: 9px; display: grid; place-items: center; color: var(--text); }
+  .radar-zoom button:active { background: var(--panel-2); }
+  .radar-zoom button:disabled { color: var(--faint); }
+  .radar-zoom svg { width: 1.3rem; height: 1.3rem; }
+  .home-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 3px solid #fff; box-shadow: 0 0 0 4px rgba(108,196,255,.35); }
+
+  /* tap radar → full page */
+  body.radar-full .radar { position: fixed; inset: 0; z-index: 800; border-radius: 0; }
+  body.radar-full .radar-title { padding: 8px 14px; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); }
+  body.radar-full .radar-title .label { display: none; }
+  body.radar-full .radar-title .full { display: block; }
+
+  /* ---------- forecast strip (tap to cycle) ---------- */
+  .forecast {
+    display: grid; grid-template-columns: 6.2rem minmax(0, 1fr); align-items: center; gap: 10px;
+    padding: 8px 12px 8px 16px; height: 6.4rem; cursor: pointer;
+    transition: background-color .15s;
+  }
+  .forecast:active { background: var(--panel-2); }
+  .fc-title { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); line-height: 1.3; }
+  .fc-dots { display: flex; gap: 5px; margin-top: 8px; }
+  .fc-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); transition: background-color .15s; }
+  .fc-dots i.on { background: var(--accent); }
+  .fc-views { min-width: 0; height: 100%; overflow-x: auto; scrollbar-width: none; }
+  .fc-views::-webkit-scrollbar { display: none; }
+  .fc-view { display: none; height: 100%; grid-auto-flow: column; grid-auto-columns: minmax(2.4rem, 1fr); }
+  .fc-view.on { display: grid; animation: fade .18s ease-out; }
+  @keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+  .cell { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-radius: 10px; }
+  .cell::before {   /* precipitation-chance bar behind each column */
+    content: ""; position: absolute; left: 18%; right: 18%; bottom: 0; height: calc(var(--p, 0) * 1%);
+    background: var(--rain); opacity: .14; border-radius: 4px 4px 0 0;
+  }
+  .cell > * { position: relative; }
+  .cell.first { background: var(--panel-2); }
+  .cell .t { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+  .cell.first .t { color: var(--text); font-weight: 600; }
+  .cell svg.wx { width: 1.75rem; height: 1.75rem; }
+  .cell .deg { font-size: 0.95rem; white-space: nowrap; }
+  .cell .lo { color: var(--faint); font-size: 0.85rem; margin-left: 3px; }
+  .cell .p { font-size: 0.66rem; color: var(--rain); min-height: 1.1em; }
+
+  /* ---------- settings ---------- */
+  dialog { border: 0; padding: 0; background: var(--panel); color: var(--text); border-radius: var(--radius); width: min(460px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  .settings { padding: 20px; display: grid; gap: 16px; user-select: text; }
+  .settings h3 { margin: 0; font-size: 1.1rem; }
+  .settings label { font-size: 0.8rem; color: var(--muted); display: block; margin-bottom: 6px; }
+  .settings input[type=search] { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .results { display: grid; gap: 4px; margin-top: 6px; }
+  .results button { text-align: left; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); font-size: 0.9rem; }
+  .results button small { color: var(--muted); }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pill { padding: 8px 14px; border-radius: 10px; background: var(--panel-2); font-size: 0.9rem; }
+  .pill.on { background: var(--accent); color: #04121e; font-weight: 600; }
+  .settings .done { justify-self: end; padding: 8px 18px; border-radius: 10px; background: var(--accent); color: #04121e; font-weight: 600; }
+  .hint { font-size: 0.75rem; color: var(--faint); line-height: 1.4; }
+
+  .loading { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); background: var(--bg); z-index: 1000; text-align: center; padding: 24px; }
+  .loading[hidden] { display: none; }
+
+  /* ---------- portrait tablets & phones: stack and scroll ---------- */
+  @media (max-aspect-ratio: 1/1), (max-width: 760px) {
+    html, body { overflow: auto; }
+    .app { height: auto; min-height: 100dvh; }
+    .main { flex: none; grid-template-columns: 1fr; }
+    .radar { height: 55vh; min-height: 300px; }
+    .nws { -webkit-line-clamp: 4; }
+  }
+  @media (max-width: 760px) {
+    :root { font-size: 15px; --gap: 10px; }
+    .card { padding: 14px; }
+    .now-temp { font-size: 4.6rem; }
+    .now-icon { width: 4.6rem; height: 4.6rem; }
+    .clock .time { font-size: 1.3rem; }
+    .forecast { grid-template-columns: 1fr; height: auto; padding: 10px; }
+    .fc-label { display: flex; align-items: center; gap: 10px; }
+    .fc-dots { margin: 0; }
+    .fc-view { height: 5.6rem; }
+  }
+</style>
+</head>
+<body>
+<div class="loading" id="loading" hidden>Loading weather…</div>
+
+<div class="app">
+  <header>
+    <div style="min-width:0">
+      <div class="place" id="place">—</div>
+      <div class="status" id="status"></div>
+    </div>
+    <div class="clock">
+      <div class="time" id="clock-time">--:--</div>
+      <div class="date" id="clock-date"></div>
+    </div>
+    <button class="icon-btn" id="open-settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <div class="alerts" id="alerts"></div>
+
+  <div class="main">
+    <section class="card now">
+      <div class="now-top">
+        <div class="now-icon" id="now-icon"></div>
+        <div class="now-temp" id="now-temp">--</div>
+      </div>
+      <div>
+        <div class="now-desc" id="now-desc"></div>
+        <div class="now-sub" id="now-sub"></div>
+      </div>
+      <div class="headsup" id="headsup"></div>
+      <div class="stats" id="stats"></div>
+      <div class="nws" id="nws"></div>
+    </section>
+
+    <section class="card radar">
+      <div id="map"></div>
+      <div class="overlay radar-title">
+        <span class="label">Radar</span>
+        <div class="full" id="radar-now"></div>
+      </div>
+      <div class="overlay radar-zoom">
+        <button id="zoom-in" aria-label="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button id="zoom-out" aria-label="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+        <button id="zoom-home" aria-label="Back to home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7M6 9.5V20h12V9.5"/></svg></button>
+      </div>
+      <div class="overlay radar-bar">
+        <button class="icon-btn" id="radar-play" aria-label="Play or pause"></button>
+        <div class="radar-time" id="radar-time">--</div>
+        <div class="radar-track" id="radar-track"></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card forecast" id="forecast" role="button" tabindex="0" aria-label="Forecast — tap to switch between 24 hours, 7 days and extended">
+    <div class="fc-label">
+      <div class="fc-title" id="fc-title">Next 24 hrs</div>
+      <div class="fc-dots" id="fc-dots"><i class="on"></i><i></i><i></i></div>
+    </div>
+    <div class="fc-views">
+      <div class="fc-view on" data-view="hourly"></div>
+      <div class="fc-view" data-view="week"></div>
+      <div class="fc-view" data-view="max"></div>
+    </div>
+  </section>
+</div>
+
+<dialog id="settings">
+  <form class="settings" method="dialog">
+    <h3>Settings</h3>
+    <div>
+      <label for="search">Location</label>
+      <input type="search" id="search" placeholder="Search city or ZIP…" autocomplete="off">
+      <div class="results" id="results"></div>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="pill" id="geo">Use my location</button>
+      </div>
+    </div>
+    <div>
+      <label>Units</label>
+      <div class="row" id="units">
+        <button type="button" class="pill" data-u="us">°F · mph · in</button>
+        <button type="button" class="pill" data-u="metric">°C · km/h · mm</button>
+      </div>
+    </div>
+    <div>
+      <label>Display</label>
+      <div class="row">
+        <button type="button" class="pill" id="dim-toggle">Dim at night</button>
+      </div>
+    </div>
+    <p class="hint" id="screen-info"></p>
+    <p class="hint">Tip: bookmark a fixed location with <code>?lat=…&amp;lon=…&amp;name=Home</code>. Data: Open-Meteo, NWS, Iowa Environmental Mesonet, RainViewer, Esri.</p>
+    <button class="done" value="done">Done</button>
+  </form>
+</dialog>
+
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+"use strict";
+
+/* ================= config & state ================= */
+const WEATHER_EVERY = 10 * 60e3;
+const ALERTS_EVERY  = 5 * 60e3;
+const RADAR_EVERY   = 5 * 60e3;
+const RADAR_FRAMES  = 11;         // 50 minutes of 5-minute scans
+const VIEWS = ["hourly", "week", "max"];
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("wx." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("wx." + k, JSON.stringify(v)); } catch {} },
+};
+
+const state = {
+  loc: null,                       // {lat, lon, name}
+  units: store.get("units", "us"),
+  dim: store.get("dim", true),
+  view: VIEWS.includes(store.get("view")) ? store.get("view") : "hourly",
+  wx: null,
+  lastOk: 0,
+  isUS: false,
+};
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ================= icons ================= */
+const SUN = '<circle cx="32" cy="32" r="11" fill="var(--sun)"/><g stroke="var(--sun)" stroke-width="3.5" stroke-linecap="round">' +
+  [0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<line x1="32" y1="9" x2="32" y2="14" transform="rotate(${a} 32 32)"/>`).join("") + "</g>";
+const MOON = '<path d="M40 14a18 18 0 1 0 12 28A15 15 0 0 1 40 14z" fill="#cfd8e6"/>';
+const cloud = (fill = "#c9d4e0", dy = 0) =>
+  `<path transform="translate(0 ${dy})" d="M20 50h26a11 11 0 0 0 1-22 15 15 0 0 0-28.5 4A9 9 0 0 0 20 50z" fill="${fill}"/>`;
+const drops = (n, color = "var(--rain)") =>
+  `<g stroke="${color}" stroke-width="3" stroke-linecap="round">` +
+  [22, 32, 42].slice(0, n).map((x) => `<line x1="${x}" y1="54" x2="${x - 3}" y2="61"/>`).join("") + "</g>";
+const flakes = () => '<g fill="var(--snow)">' + [22, 32, 42].map((x, i) => `<circle cx="${x}" cy="${i % 2 ? 60 : 56}" r="2.6"/>`).join("") + "</g>";
+const BOLT = '<path d="M34 46l-7 10h6l-3 8 9-12h-6l4-6z" fill="var(--sun)"/>';
+const FOG = '<g stroke="#9fb0c2" stroke-width="3.5" stroke-linecap="round"><line x1="12" y1="30" x2="52" y2="30"/><line x1="16" y1="40" x2="48" y2="40"/><line x1="12" y1="50" x2="52" y2="50"/></g>';
+
+function wxInfo(code) {
+  const map = {
+    0: ["Clear", "clear"], 1: ["Mostly clear", "mostly"], 2: ["Partly cloudy", "partly"], 3: ["Cloudy", "cloudy"],
+    45: ["Fog", "fog"], 48: ["Freezing fog", "fog"],
+    51: ["Light drizzle", "drizzle"], 53: ["Drizzle", "drizzle"], 55: ["Heavy drizzle", "drizzle"],
+    56: ["Freezing drizzle", "ice"], 57: ["Freezing drizzle", "ice"],
+    61: ["Light rain", "rain"], 63: ["Rain", "rain"], 65: ["Heavy rain", "rain"],
+    66: ["Freezing rain", "ice"], 67: ["Freezing rain", "ice"],
+    71: ["Light snow", "snow"], 73: ["Snow", "snow"], 75: ["Heavy snow", "snow"], 77: ["Snow grains", "snow"],
+    80: ["Showers", "showers"], 81: ["Showers", "showers"], 82: ["Heavy showers", "rain"],
+    85: ["Snow showers", "snow"], 86: ["Heavy snow showers", "snow"],
+    95: ["Thunderstorms", "thunder"], 96: ["Thunderstorms, hail", "thunder"], 99: ["Severe storms, hail", "thunder"],
+  };
+  const [label, kind] = map[code] || ["—", "cloudy"];
+  return { label, kind };
+}
+
+function icon(code, isDay = true, cls = "wx") {
+  const { kind } = wxInfo(code);
+  const orb = isDay ? SUN : MOON;
+  const small = (s) => `<g transform="translate(-9 -9) scale(.85)">${s}</g>`;
+  const body = {
+    clear: orb,
+    mostly: small(orb) + `<g transform="translate(14 8) scale(.7)">${cloud()}</g>`,
+    partly: small(orb) + cloud(),
+    cloudy: cloud("#8e9cad", -6) + cloud(),
+    fog: FOG,
+    drizzle: cloud("#b5c2d0", -6) + drops(2),
+    rain: cloud("#9aa9ba", -6) + drops(3),
+    showers: small(orb) + cloud("#b5c2d0", -4) + drops(2),
+    ice: cloud("#9aa9ba", -6) + drops(2, "#a8e4ff") + '<circle cx="42" cy="58" r="2.6" fill="var(--snow)"/>',
+    snow: cloud("#b5c2d0", -6) + flakes(),
+    thunder: cloud("#6f7e90", -8) + BOLT + drops(2),
+  }[kind];
+  return `<svg class="${cls}" viewBox="0 0 64 64" aria-hidden="true">${body}</svg>`;
+}
+
+/* ================= formatting ================= */
+const U = () => state.units === "us"
+  ? { wind: "mph", qs: "&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch" }
+  : { wind: "km/h", qs: "" };
+
+const tz = () => state.wx?.timezone;
+const fmt = (opts) => new Intl.DateTimeFormat(undefined, { timeZone: tz(), ...opts });
+const fTime = (s) => fmt({ hour: "numeric", minute: "2-digit" }).format(s * 1000);
+const fHour = (s) => fmt({ hour: "numeric" }).format(s * 1000).replace(/\s?([AP])M/i, (_, x) => x.toLowerCase());
+const fDay = (s) => fmt({ weekday: "short" }).format(s * 1000);
+const fDate = (s) => fmt({ day: "numeric" }).format(s * 1000);
+const dayKey = (s) => fmt({ year: "numeric", month: "2-digit", day: "2-digit" }).format(s * 1000);
+const r = Math.round;
+const compass = (deg) => ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][r(deg / 22.5) % 16];
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Temperature → color, always evaluated in °F so the palette is unit-independent
+function tempColor(t) {
+  const f = state.units === "us" ? t : t * 9 / 5 + 32;
+  const stops = [[0, "#b28cff"], [20, "#6c8cff"], [35, "#4fc3f7"], [50, "#4dd0a8"], [65, "#c6e05a"], [78, "#ffc94a"], [90, "#ff8a3d"], [100, "#ff4d5e"]];
+  for (const [limit, color] of stops) if (f <= limit) return color;
+  return stops.at(-1)[1];
+}
+
+/* ================= location ================= */
+function initialLocation() {
+  const q = new URLSearchParams(location.search);
+  const lat = parseFloat(q.get("lat")), lon = parseFloat(q.get("lon"));
+  if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lon, name: q.get("name") || "" };
+  return store.get("loc", null);
+}
+
+const cacheKey = () => `${state.loc.lat},${state.loc.lon},${state.units}`;
+
+function setLocation(loc) {
+  state.loc = loc;
+  store.set("loc", loc);
+  state.isUS = loc.lat > 18 && loc.lat < 72 && loc.lon > -170 && loc.lon < -65;
+  $("place").textContent = loc.name || `${loc.lat.toFixed(2)}, ${loc.lon.toFixed(2)}`;
+  if (!loc.name) reverseName(loc);
+
+  // Paint instantly from the last good response, then refresh in the background.
+  const cached = store.get("cache", null);
+  if (cached?.key === cacheKey()) {
+    state.wx = cached.wx;
+    state.lastOk = cached.at;
+    render();
+  } else {
+    state.wx = null;
+    $("loading").hidden = false;
+  }
+  const text = store.get("nwsText", null);
+  $("nws").innerHTML = text?.key === cacheKey() ? text.html : "";
+
+  refreshAll();
+  if (radar.map) radar.recenter(); else if (window.L) radar.init();
+}
+
+async function reverseName(loc) {
+  // NWS knows the nearest town for US points; elsewhere we just show coordinates.
+  try {
+    const p = await nws(`/points/${loc.lat.toFixed(4)},${loc.lon.toFixed(4)}`);
+    const rl = p.properties.relativeLocation.properties;
+    loc.name = `${rl.city}, ${rl.state}`;
+    store.set("loc", loc);
+    $("place").textContent = loc.name;
+  } catch {}
+}
+
+function geolocate() {
+  return new Promise((res, rej) => {
+    if (!navigator.geolocation) return rej(new Error("no geolocation"));
+    navigator.geolocation.getCurrentPosition(
+      (p) => res({ lat: +p.coords.latitude.toFixed(4), lon: +p.coords.longitude.toFixed(4), name: "" }),
+      rej, { timeout: 10000, maximumAge: 3600e3 });
+  });
+}
+
+/* ================= fetching ================= */
+async function getJSON(url, opts) {
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error(`${res.status} ${url}`);
+  return res.json();
+}
+const nws = (path) => getJSON("https://api.weather.gov" + path, { headers: { Accept: "application/geo+json" } });
+
+let weatherRetry;
+async function loadWeather() {
+  clearTimeout(weatherRetry);
+  const { lat, lon } = state.loc, key = cacheKey();
+  const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon +
+    "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,dew_point_2m,uv_index" +
+    "&hourly=temperature_2m,precipitation_probability,snowfall,weather_code,is_day,wind_gusts_10m&forecast_hours=48" +
+    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max" +
+    "&timezone=auto&timeformat=unixtime&forecast_days=16" + U().qs;
+  try {
+    const wx = await getJSON(url);
+    if (key !== cacheKey()) return;   // location/units changed while in flight
+    state.wx = wx;
+    state.lastOk = Date.now();
+    store.set("cache", { key, at: state.lastOk, wx });
+    render();
+  } catch (e) {
+    console.warn(e);
+    weatherRetry = setTimeout(loadWeather, 60e3);   // retry sooner while offline
+  }
+  updateStatus();
+}
+
+async function loadAlerts() {
+  const box = $("alerts");
+  if (!state.isUS) { box.innerHTML = ""; return; }
+  try {
+    const { lat, lon } = state.loc;
+    const data = await nws(`/alerts/active?point=${lat.toFixed(4)},${lon.toFixed(4)}`);
+    const open = new Set([...box.querySelectorAll(".alert.open")].map((el) => el.dataset.id));
+    box.innerHTML = data.features.map(({ properties: a }) => {
+      const severe = /Extreme|Severe/.test(a.severity) || /Warning/.test(a.event);
+      const until = a.ends || a.expires;
+      return `<button class="alert ${severe ? "severe" : ""} ${open.has(a.id) ? "open" : ""}" data-id="${esc(a.id)}">
+        <b>${esc(a.event)}</b><span>${until ? "until " + esc(fmt({ weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(until))) : ""}</span>
+        <p>${esc(a.headline || "")}\n\n${esc(a.description || "")}${a.instruction ? "\n\n" + esc(a.instruction) : ""}</p></button>`;
+    }).join("");
+  } catch (e) { console.warn(e); }
+}
+
+let nwsForecastUrl = null, nwsForecastFor = null;
+async function loadNwsText() {
+  const el = $("nws");
+  if (!state.isUS) { el.innerHTML = ""; return; }
+  try {
+    const key = cacheKey();
+    if (nwsForecastFor !== key) {
+      const p = await nws(`/points/${state.loc.lat.toFixed(4)},${state.loc.lon.toFixed(4)}`);
+      nwsForecastUrl = p.properties.forecast;
+      nwsForecastFor = key;
+    }
+    const f = await getJSON(nwsForecastUrl, { headers: { Accept: "application/geo+json" } });
+    const [a, b] = f.properties.periods;
+    const html = [a, b].filter(Boolean).map((p) => `<b>${esc(p.name)}:</b> ${esc(p.detailedForecast)}`).join(" ");
+    el.innerHTML = html;
+    store.set("nwsText", { key, html });
+  } catch (e) { console.warn(e); }
+}
+
+function refreshAll() { if (state.loc) { loadWeather(); loadAlerts(); loadNwsText(); } }
+
+/* ================= rendering ================= */
+function render() {
+  const w = state.wx;
+  if (!w) return;
+  $("loading").hidden = true;
+  renderNow(w);
+  renderForecast();
+  applyDim();
+}
+
+function renderNow(w) {
+  const c = w.current, d = w.daily, u = U();
+  const info = wxInfo(c.weather_code);
+  const ti = todayIndex();
+  $("now-icon").innerHTML = icon(c.weather_code, !!c.is_day);
+  $("now-temp").innerHTML = `${r(c.temperature_2m)}<sup>°${state.units === "us" ? "F" : "C"}</sup>`;
+  $("now-desc").textContent = info.label;
+  $("now-sub").textContent = `Feels ${r(c.apparent_temperature)}° · High ${r(d.temperature_2m_max[ti])}° · Low ${r(d.temperature_2m_min[ti])}°`;
+  $("radar-now").innerHTML = `<b>${r(c.temperature_2m)}°</b>${esc(info.label)} · <span id="radar-clock"></span>`;
+  tickClock();
+
+  const sunEvents = [...d.sunrise.map((t) => ["Sunrise", t]), ...d.sunset.map((t) => ["Sunset", t])]
+    .filter(([, t]) => t * 1000 > Date.now()).sort((a, b) => a[1] - b[1]);
+  const [sunLabel, sunT] = sunEvents[0] || ["Sunset", d.sunset[ti]];
+
+  const pressure = state.units === "us" ? `${(c.pressure_msl * 0.02953).toFixed(2)} in` : `${r(c.pressure_msl)} hPa`;
+  const gust = c.wind_gusts_10m - c.wind_speed_10m >= 8 ? ` · G${r(c.wind_gusts_10m)}` : "";
+  const stats = [
+    ["Wind", `${r(c.wind_speed_10m)} ${u.wind} ${compass(c.wind_direction_10m)}${gust}`],
+    ["Humidity", `${r(c.relative_humidity_2m)}%`],
+    ["Dew point", `${r(c.dew_point_2m)}°`],
+    ["Pressure", pressure],
+    ["UV index", `${r(c.uv_index ?? 0)} · max ${r(d.uv_index_max[ti] ?? 0)}`],
+    [sunLabel, fTime(sunT)],
+  ];
+  $("stats").innerHTML = stats.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  $("headsup").innerHTML = headsUp(w);
+}
+
+function todayIndex() {
+  const w = state.wx, k = dayKey(Date.now() / 1000);
+  const i = w.daily.time.findIndex((t) => dayKey(t) === k);
+  return i < 0 ? 0 : i;
+}
+
+function hourStart() {
+  const h = state.wx.hourly.time, now = Date.now() / 1000;
+  const i = h.findIndex((t) => t + 3600 > now);
+  return i < 0 ? 0 : i;
+}
+
+// A short, plain-language summary of what matters in the next ~18 hours — the "do I need a coat/umbrella" line.
+function headsUp(w) {
+  const h = w.hourly, i0 = hourStart(), end = Math.min(i0 + 18, h.time.length), u = U();
+  const notes = [];
+
+  // precipitation: when does it start (or stop)?
+  const wet = (i) => h.precipitation_probability[i] >= 50 && h.weather_code[i] >= 51;
+  const nowWet = w.current.precipitation > 0 || wet(i0);
+  let change = -1;
+  for (let i = i0 + 1; i < end; i++) if (wet(i) !== nowWet) { change = i; break; }
+  if (!nowWet && change > 0) {
+    const kind = wxInfo(h.weather_code[change]).label.toLowerCase();
+    notes.push(`<strong>${cap(kind)}</strong> likely around ${fHour(h.time[change])} (${h.precipitation_probability[change]}%)`);
+  } else if (nowWet && change > 0) {
+    notes.push(`Precipitation should <strong>end around ${fHour(h.time[change])}</strong>`);
+  } else if (nowWet) {
+    notes.push(`<strong>Wet</strong> through at least ${fHour(h.time[end - 1])}`);
+  }
+
+  // snow accumulation
+  const snow = h.snowfall.slice(i0, end).reduce((a, b) => a + (b || 0), 0);  // inches (US) or cm
+  if (snow >= (state.units === "us" ? 0.2 : 0.5)) notes.push(`<strong>${snow.toFixed(1)} ${state.units === "us" ? "in" : "cm"}</strong> of snow possible`);
+
+  // temperature swing
+  const temps = h.temperature_2m.slice(i0, end);
+  const freezing = state.units === "us" ? 32 : 0;
+  const cur = w.current.temperature_2m;
+  const lo = Math.min(...temps), hi = Math.max(...temps);
+  if (cur > freezing && lo <= freezing) {
+    const j = temps.findIndex((t) => t <= freezing);
+    notes.push(`<strong>Below freezing</strong> by ${fHour(h.time[i0 + j])}`);
+  } else if (hi - cur >= 12 * (state.units === "us" ? 1 : 5 / 9)) {
+    notes.push(`Warming to <strong>${r(hi)}°</strong>`);
+  } else if (cur - lo >= 15 * (state.units === "us" ? 1 : 5 / 9)) {
+    notes.push(`Dropping to <strong>${r(lo)}°</strong> by ${fHour(h.time[i0 + temps.indexOf(lo)])}`);
+  }
+
+  // wind
+  const gust = Math.max(...h.wind_gusts_10m.slice(i0, i0 + 12));
+  if (gust >= (state.units === "us" ? 35 : 55)) notes.push(`Gusts to <strong>${r(gust)} ${u.wind}</strong>`);
+
+  // what to wear
+  const feels = w.current.apparent_temperature, f = state.units === "us" ? feels : feels * 9 / 5 + 32;
+  const wear = f < 15 ? "Heavy coat, hat & gloves" : f < 35 ? "Winter coat" : f < 50 ? "Jacket" : f < 62 ? "Light layer" : null;
+  if (wear) notes.unshift(`<strong>${wear}</strong>`);
+  if (!nowWet && notes.every((n) => !/likely|Wet/.test(n)) && w.daily.precipitation_probability_max[todayIndex()] < 25 && !wear)
+    notes.push("No umbrella needed today");
+
+  return notes.join(" · ");
+}
+
+/* ---------- forecast strip: all three views are pre-rendered so taps switch instantly ---------- */
+function renderForecast() {
+  if (!state.wx) return;
+  const d = state.wx.daily, maxDays = d.time.length - todayIndex();
+  const views = { hourly: hourlyHTML(), week: daysHTML(7), max: daysHTML(maxDays) };
+  document.querySelectorAll(".fc-view").forEach((el) => { el.innerHTML = views[el.dataset.view]; });
+  showView(state.view, maxDays);
+}
+
+function showView(v, maxDays = state.wx ? state.wx.daily.time.length - todayIndex() : 16) {
+  state.view = v;
+  store.set("view", v);
+  document.querySelectorAll(".fc-view").forEach((el) => el.classList.toggle("on", el.dataset.view === v));
+  document.querySelectorAll("#fc-dots i").forEach((el, k) => el.classList.toggle("on", VIEWS[k] === v));
+  $("fc-title").textContent = { hourly: "Next 24 hrs", week: "7 days", max: `${maxDays} days` }[v];
+  document.querySelector(".fc-views").scrollLeft = 0;
+}
+
+function cell({ first, t, code, isDay, deg, p }) {
+  return `<div class="cell ${first ? "first" : ""}" style="--p:${p >= 10 ? p : 0}">
+    <div class="t">${t}</div>${icon(code, isDay)}<div class="deg">${deg}</div><div class="p">${p >= 20 ? p + "%" : ""}</div></div>`;
+}
+
+function hourlyHTML() {
+  const w = state.wx, h = w.hourly, i0 = hourStart();
+  const out = [cell({   // "Now" uses live conditions rather than the hourly model value
+    first: true, t: "Now", code: w.current.weather_code, isDay: !!w.current.is_day,
+    deg: `<span style="color:${tempColor(w.current.temperature_2m)}">${r(w.current.temperature_2m)}°</span>`,
+    p: h.precipitation_probability[i0] ?? 0,
+  })];
+  for (let i = i0 + 1; i < Math.min(i0 + 25, h.time.length); i++) {
+    const t = h.temperature_2m[i];
+    out.push(cell({ t: fHour(h.time[i]), code: h.weather_code[i], isDay: !!h.is_day[i],
+      deg: `<span style="color:${tempColor(t)}">${r(t)}°</span>`, p: h.precipitation_probability[i] ?? 0 }));
+  }
+  return out.join("");
+}
+
+function daysHTML(n) {
+  const d = state.wx.daily, ti = todayIndex(), out = [];
+  for (let i = ti; i < Math.min(ti + n, d.time.length); i++) {
+    const hi = d.temperature_2m_max[i], lo = d.temperature_2m_min[i];
+    out.push(cell({
+      first: i === ti, t: i === ti ? "Today" : `${fDay(d.time[i])} ${n > 7 ? "" : fDate(d.time[i])}`.trim(),
+      code: d.weather_code[i], isDay: true,
+      deg: `<span style="color:${tempColor(hi)}">${r(hi)}°</span><span class="lo">${r(lo)}°</span>`,
+      p: d.precipitation_probability_max[i] ?? 0,
+    }));
+  }
+  return out.join("");
+}
+
+/* ================= radar ================= */
+const radar = {
+  map: null, frames: [], layers: new Map(), pos: 0, playing: true, timer: null, home: null, refresh: null,
+
+  init() {
+    // Restore wherever the map was last left (for this location); otherwise start centered on home.
+    const saved = store.get("mapView", null);
+    const restore = saved?.home === homeKey();
+    this.map = L.map("map", { zoomControl: false, doubleClickZoom: false, minZoom: 3, maxZoom: 10 })
+      .setView(restore ? [saved.lat, saved.lon] : [state.loc.lat, state.loc.lon], restore ? saved.zoom : HOME_ZOOM);
+    this.map.on("moveend", () => {
+      const c = this.map.getCenter();
+      store.set("mapView", { home: homeKey(), lat: c.lat, lon: c.lng, zoom: this.map.getZoom() });
+    });
+    // Esri Dark Gray Canvas: keyless basemap
+    const esri = (layer) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${layer}/MapServer/tile/{z}/{y}/{x}`;
+    L.tileLayer(esri("World_Dark_Gray_Base"), {
+      attribution: 'Map &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, &copy; OpenStreetMap contributors',
+      maxZoom: 16,
+    }).addTo(this.map);
+    // labels go above the radar so city names stay readable
+    this.map.createPane("labels").style.zIndex = 450;
+    this.map.getPane("labels").style.pointerEvents = "none";
+    L.tileLayer(esri("World_Dark_Gray_Reference"), { pane: "labels", maxZoom: 16 }).addTo(this.map);
+    this.home = L.marker([state.loc.lat, state.loc.lon], {
+      icon: L.divIcon({ className: "", html: '<div class="home-dot"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }),
+      interactive: false, zIndexOffset: 1000,
+    }).addTo(this.map);
+
+    // A tap (not a drag or pinch) toggles full-page radar.
+    this.map.on("click", () => setRadarFull(!document.body.classList.contains("radar-full")));
+    $("radar-play").onclick = () => { this.playing = !this.playing; this.drawControls(); if (this.playing) this.tick(); };
+    // One-tap zoom so pinching is never required. Zooming keeps home in view when it's on screen.
+    const zoomBy = (dz) => {
+      const z = this.map.getZoom() + dz, home = L.latLng(state.loc.lat, state.loc.lon);
+      if (this.map.getBounds().contains(home)) this.map.setZoomAround(home, z);
+      else this.map.setZoom(z);
+    };
+    $("zoom-in").onclick = () => zoomBy(1);
+    $("zoom-out").onclick = () => zoomBy(-1);
+    $("zoom-home").onclick = () => this.goHome();
+    const syncZoom = () => {
+      $("zoom-in").disabled = this.map.getZoom() >= this.map.getMaxZoom();
+      $("zoom-out").disabled = this.map.getZoom() <= this.map.getMinZoom();
+    };
+    this.map.on("zoomend", syncZoom);
+    syncZoom();
+    new ResizeObserver(() => this.map.invalidateSize()).observe($("map"));
+    this.load();
+    this.refresh = setInterval(() => this.load(), RADAR_EVERY);
+  },
+
+  // Called on every setLocation (including unit changes): only move the map when the location really changed.
+  recenter() {
+    if (!this.map) return;
+    const h = this.home.getLatLng();
+    if (h.lat === state.loc.lat && h.lng === state.loc.lon) return;
+    this.home.setLatLng([state.loc.lat, state.loc.lon]);
+    this.map.setView([state.loc.lat, state.loc.lon], this.map.getZoom());
+    this.load();
+  },
+
+  // Home button: re-center on home, keeping the current zoom.
+  goHome() {
+    if (!this.map) return;
+    this.map.flyTo([state.loc.lat, state.loc.lon], this.map.getZoom(), { duration: 0.6 });
+  },
+
+  addLayer(f) {
+    if (!this.layers.has(f.url))
+      this.layers.set(f.url, L.tileLayer(f.url, { opacity: 0, maxNativeZoom: f.maxZoom, maxZoom: 10, zIndex: 10, attribution: f.attribution }).addTo(this.map));
+    return this.layers.get(f.url);
+  },
+
+  async load() {
+    let frames;
+    try {
+      frames = this.inCONUS() ? await this.iemFrames() : await this.rainviewerFrames();
+    } catch (e) {
+      console.warn("radar", e);
+      return;
+    }
+    // Frame URLs are stable per scan time, so a refresh only fetches the newest scan;
+    // older scans stay loaded (and HTTP-cached).
+    const keep = new Set(frames.map((f) => f.url));
+    for (const [url, layer] of this.layers) if (!keep.has(url)) { this.map.removeLayer(layer); this.layers.delete(url); }
+
+    this.frames = frames;
+    this.pos = frames.length - 1;
+    const latest = this.addLayer(frames.at(-1));
+    this.drawControls();
+    // Load the newest scan first; fill in the loop once it's on screen.
+    const rest = () => frames.slice(0, -1).forEach((f) => this.addLayer(f));
+    if (latest.isLoading()) { latest.once("load", rest); setTimeout(rest, 3000); } else rest();
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.tick(), 3000);
+  },
+
+  inCONUS() { const { lat, lon } = state.loc; return lat > 23 && lat < 51 && lon > -127 && lon < -65; },
+
+  // Iowa Environmental Mesonet NEXRAD composite: full-resolution US radar, timestamped 5-minute scans
+  async iemFrames() {
+    const step = 5 * 60e3;
+    let latest;
+    try {
+      const j = await getJSON("https://mesonet.agron.iastate.edu/data/gis/images/4326/USCOMP/n0q_0.json", { cache: "no-store" });
+      latest = Date.parse(j.meta.valid);
+    } catch { latest = Math.floor((Date.now() - step) / step) * step; }
+    const stamp = (t) => new Date(t).toISOString().slice(0, 16).replace(/[-T:]/g, "");
+    return Array.from({ length: RADAR_FRAMES }, (_, k) => latest - (RADAR_FRAMES - 1 - k) * step).map((t) => ({
+      time: t,
+      url: `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::USCOMP-N0Q-${stamp(t)}/{z}/{x}/{y}.png`,
+      maxZoom: 10,
+      attribution: 'Radar &copy; <a href="https://mesonet.agron.iastate.edu/">IEM</a>',
+    }));
+  },
+
+  async rainviewerFrames() {
+    const j = await getJSON("https://api.rainviewer.com/public/weather-maps.json");
+    return j.radar.past.map((f) => ({
+      time: f.time * 1000,
+      url: `${j.host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`,
+      maxZoom: 7,
+      attribution: 'Radar &copy; <a href="https://www.rainviewer.com/">RainViewer</a>',
+    }));
+  },
+
+  show(i) {
+    const f = this.frames[i];
+    if (!f) return;
+    for (const [url, layer] of this.layers) layer.setOpacity(url === f.url ? 0.75 : 0);
+    $("radar-time").textContent = fTime(f.time / 1000);
+    $("radar-track").querySelectorAll("i").forEach((el, k) => el.classList.toggle("on", k <= i));
+  },
+
+  tick() {
+    clearTimeout(this.timer);
+    if (!this.playing || !this.frames.length) return;
+    this.pos = (this.pos + 1) % this.frames.length;
+    this.show(this.pos);
+    const last = this.pos === this.frames.length - 1;
+    this.timer = setTimeout(() => this.tick(), last ? 2500 : 450);
+  },
+
+  drawControls() {
+    $("radar-play").innerHTML = this.playing
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l12-7z"/></svg>';
+    $("radar-track").innerHTML = this.frames.map(() => "<i></i>").join("");
+    this.show(this.pos);
+  },
+};
+
+const HOME_ZOOM = 7;
+const homeKey = () => `${state.loc.lat},${state.loc.lon}`;
+
+function setRadarFull(on) {
+  document.body.classList.toggle("radar-full", on);
+  store.set("radarFull", on);
+}
+
+/* ================= clock, status, dimming ================= */
+function tickClock() {
+  const now = new Date();
+  const o = tz() ? { timeZone: tz() } : {};
+  const time = now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", ...o });
+  $("clock-time").textContent = time;
+  $("clock-date").textContent = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", ...o });
+  const rc = $("radar-clock");
+  if (rc) rc.textContent = time;
+}
+
+function updateStatus() {
+  const el = $("status");
+  if (!state.lastOk) { el.textContent = "Connecting…"; return; }
+  const mins = r((Date.now() - state.lastOk) / 60e3);
+  const stale = mins > 20;
+  el.classList.toggle("stale", stale);
+  el.textContent = stale ? `Offline · updated ${mins} min ago` : `Updated ${mins < 1 ? "just now" : mins + " min ago"}`;
+}
+
+let undimUntil = 0;
+function applyDim() {
+  const d = state.wx?.daily;
+  let night = false;
+  if (state.dim && d && Date.now() > undimUntil) {
+    const now = Date.now() / 1000, ti = todayIndex();
+    night = now < d.sunrise[ti] - 1800 || now > d.sunset[ti] + 3600;
+  }
+  document.body.classList.toggle("dim", night);
+}
+
+// Keep the tablet screen on (works over https or localhost)
+async function keepAwake() {
+  try { if ("wakeLock" in navigator && document.visibilityState === "visible") await navigator.wakeLock.request("screen"); } catch {}
+}
+
+/* ================= settings dialog ================= */
+function syncSettingsUI() {
+  document.querySelectorAll("#units .pill").forEach((b) => b.classList.toggle("on", b.dataset.u === state.units));
+  $("dim-toggle").classList.toggle("on", state.dim);
+}
+
+let searchTimer;
+$("search").addEventListener("input", (e) => {
+  clearTimeout(searchTimer);
+  const q = e.target.value.trim();
+  if (q.length < 2) { $("results").innerHTML = ""; return; }
+  searchTimer = setTimeout(async () => {
+    try {
+      const j = await getJSON(`https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&name=${encodeURIComponent(q)}`);
+      $("results").innerHTML = (j.results || []).map((p) =>
+        `<button type="button" data-lat="${p.latitude}" data-lon="${p.longitude}" data-name="${esc(p.name + (p.admin1 ? ", " + p.admin1 : ""))}">
+          ${esc(p.name)} <small>${esc([p.admin1, p.country].filter(Boolean).join(", "))}</small></button>`).join("") ||
+        '<div class="hint">No matches</div>';
+    } catch { $("results").innerHTML = '<div class="hint">Search unavailable</div>'; }
+  }, 300);
+});
+$("results").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-lat]");
+  if (!b) return;
+  setLocation({ lat: +b.dataset.lat, lon: +b.dataset.lon, name: b.dataset.name });
+  $("results").innerHTML = ""; $("search").value = "";
+  $("settings").close();
+});
+$("geo").onclick = async () => {
+  $("geo").textContent = "Locating…";
+  try { setLocation(await geolocate()); $("settings").close(); }
+  catch { alert("Couldn't get your location. Browsers only allow this over https or localhost — search for your town instead."); }
+  $("geo").textContent = "Use my location";
+};
+$("units").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-u]");
+  if (!b || b.dataset.u === state.units) return;
+  state.units = b.dataset.u; store.set("units", state.units);
+  syncSettingsUI();
+  setLocation(state.loc);   // re-keys the cache and refetches in the new units
+});
+$("dim-toggle").onclick = () => { state.dim = !state.dim; store.set("dim", state.dim); syncSettingsUI(); applyDim(); };
+$("open-settings").onclick = () => {
+  syncSettingsUI();
+  // Shows what the browser actually gives the page, in CSS pixels — handy when sizing for a specific tablet.
+  const de = document.documentElement, dpr = devicePixelRatio;
+  const scrolls = de.scrollHeight > innerHeight || de.scrollWidth > innerWidth;
+  $("screen-info").textContent = `Screen: page area ${innerWidth} × ${innerHeight} CSS px at ${dpr}× ` +
+    `(${r(innerWidth * dpr)} × ${r(innerHeight * dpr)} device px)` + (scrolls ? ` · content ${de.scrollWidth} × ${de.scrollHeight} overflows` : " · fits, no scrolling");
+  $("settings").showModal();
+};
+
+/* ================= interactions ================= */
+// Tap the forecast strip: 24 hrs → 7 days → max days → 24 hrs. Ignore drags (horizontal scroll on phones).
+let downX = 0;
+$("forecast").addEventListener("pointerdown", (e) => { downX = e.clientX; });
+$("forecast").addEventListener("click", (e) => {
+  if (Math.abs(e.clientX - downX) > 10) return;
+  showView(VIEWS[(VIEWS.indexOf(state.view) + 1) % VIEWS.length]);
+});
+$("forecast").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showView(VIEWS[(VIEWS.indexOf(state.view) + 1) % VIEWS.length]); }
+});
+$("alerts").addEventListener("click", (e) => e.target.closest(".alert")?.classList.toggle("open"));
+addEventListener("keydown", (e) => { if (e.key === "Escape") setRadarFull(false); });
+
+// Any touch briefly un-dims the screen.
+document.addEventListener("pointerdown", () => {
+  if (document.body.classList.contains("dim")) { undimUntil = Date.now() + 60e3; applyDim(); }
+}, { capture: true });
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  keepAwake();
+  if (Date.now() - state.lastOk > WEATHER_EVERY) refreshAll();
+  if (radar.map) radar.load();
+});
+
+/* ================= boot ================= */
+tickClock();
+setInterval(tickClock, 1000);
+setInterval(updateStatus, 30e3);
+setInterval(applyDim, 60e3);
+setInterval(refreshAll, WEATHER_EVERY);
+setInterval(() => state.loc && loadAlerts(), ALERTS_EVERY);
+// Long-running kiosk hygiene: reload twice a day to pick up a fresh page & clear any leaks
+setTimeout(() => location.reload(), 12 * 3600e3);
+keepAwake();
+
+// Weather paints immediately (from cache when available); the map starts once Leaflet has loaded.
+setRadarFull(store.get("radarFull", false));
+// No location is built in (the code is public): use the bookmarked ?lat/lon or the saved one,
+// else try the device's location, else open settings to search.
+const startLoc = initialLocation();
+if (startLoc) setLocation(startLoc);
+else {
+  $("loading").textContent = "Finding your location…";
+  $("loading").hidden = false;
+  geolocate().then(setLocation, () => {
+    $("loading").hidden = true;
+    syncSettingsUI();
+    $("settings").showModal();
+  });
+}
+updateStatus();
+document.addEventListener("DOMContentLoaded", () => { if (state.loc && !radar.map) radar.init(); });
+</script>
+</body>
+</html>
