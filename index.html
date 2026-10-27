@@ -109,6 +109,18 @@
   .wear .v { font-size: 0.98rem; font-weight: 600; margin-top: 2px; line-height: 1.2; }
   .wear .w.off .v { color: var(--faint); font-weight: 400; }
   .wear .w.wet .v { color: var(--rain); }
+  .wear-block { display: grid; gap: 6px; }
+  .wear-head { display: flex; align-items: center; gap: 8px; }
+  .wear-head .lbl { font-size: 0.68rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
+  .walk-btn { margin-left: auto; padding: 5px 12px; border-radius: 999px; background: var(--panel-2); font-size: 0.82rem; font-weight: 600; color: var(--accent); }
+  .walk-btn::after { content: ""; display: inline-block; margin-left: 6px; border: 4px solid transparent; border-top-color: currentColor; vertical-align: -1px; }
+  .walk-btn:active { background: var(--line); }
+  #walk-dialog { width: auto; }
+  .walk-pick { padding: 18px 20px 20px; display: grid; gap: 14px; text-align: center; }
+  .walk-pick .t { font-size: 1rem; font-weight: 600; }
+  .walk-pick .row3 { display: grid; grid-template-columns: repeat(3, 5.5rem); gap: 10px; }
+  .walk-pick button { padding: 16px 0; border-radius: 14px; background: var(--panel-2); font-size: 1.1rem; font-weight: 600; }
+  .walk-pick button.on { background: var(--accent); color: #04121e; }
   .wear .why { grid-column: 1 / -1; font-size: 0.72rem; color: var(--faint); margin-top: -2px; }
   .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
   .stat .k { font-size: 0.68rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
@@ -257,7 +269,13 @@
         <div class="now-desc" id="now-desc"></div>
         <div class="now-sub" id="now-sub"></div>
       </div>
-      <div class="wear" id="wear"></div>
+      <div class="wear-block">
+        <div class="wear-head">
+          <span class="lbl">What to wear</span>
+          <button class="walk-btn" id="walk-btn" aria-haspopup="dialog">Out for 1 hr</button>
+        </div>
+        <div class="wear" id="wear"></div>
+      </div>
       <div class="headsup" id="headsup"></div>
       <div class="stats" id="stats"></div>
       <div class="nws" id="nws"></div>
@@ -294,6 +312,17 @@
     </div>
   </section>
 </div>
+
+<dialog id="walk-dialog" aria-label="How long will you be out?">
+  <div class="walk-pick">
+    <div class="t">How long will you be out?</div>
+    <div class="row3" id="walk-options">
+      <button type="button" data-walk="1">1 hr</button>
+      <button type="button" data-walk="2">2 hrs</button>
+      <button type="button" data-walk="3">3 hrs</button>
+    </div>
+  </div>
+</dialog>
 
 <dialog id="settings">
   <form class="settings" method="dialog">
@@ -346,7 +375,6 @@ const VIEWS = ["hourly", "week", "max"];
 
 // What-to-wear set points, always stored in °F / inches / mph and converted for display.
 const WEAR_DEFAULTS = {
-  hours: 3,          // look-ahead window
   hatRate: 0.02,     // Gore-Tex hat when expected precipitation ≥ this (in/hr)
   capUV: 3,          // cap when the UV index reaches this
   likely: 40,        // % chance at which forecast precipitation counts as "expected"
@@ -358,7 +386,7 @@ const WEAR_DEFAULTS = {
   heavy: 32,         //             Heavy (includes gloves) below this
   pantsRate: 0.10,   // shell pants when expected precipitation ≥ this (in/hr)
   wetGround: 0.01,   // Gore-Tex footwear when the past 3 hours brought ≥ this (in)
-  walk: 1,           // hi-viz when a walk this long (hrs), starting now, touches darkness
+  walk: 1,           // time outside, starting now (1, 2 or 3 hrs) — picked on the main panel
 };
 const WEAR_SLIDERS = [
   ["Headwear", [
@@ -381,12 +409,8 @@ const WEAR_SLIDERS = [
   ["Footwear", [
     ["wetGround", "Gore-Tex when past 3 hrs brought ≥", 0.01, 0.25, 0.01, "amount"],
   ]],
-  ["Visibility", [
-    ["walk", "Hi-Viz if a walk this long reaches darkness", 0.5, 3, 0.25, "hours"],
-  ]],
   ["Forecast", [
     ["likely", "Count rain/snow as expected at chance ≥", 10, 90, 5, "pct"],
-    ["hours", "Look ahead", 1, 8, 1, "hours"],
   ]],
 ];
 
@@ -400,6 +424,7 @@ const state = {
   units: store.get("units", "us"),
   dim: store.get("dim", true),
   wear: { ...WEAR_DEFAULTS, ...store.get("wear", {}) },
+  walks: [1, 2, 3],
   view: VIEWS.includes(store.get("view")) ? store.get("view") : "hourly",
   wx: null,
   lastOk: 0,
@@ -551,7 +576,7 @@ async function loadWeather() {
   const { lat, lon } = state.loc, key = cacheKey();
   const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon +
     "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,dew_point_2m,uv_index" +
-    "&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,snowfall,snow_depth,weather_code,is_day,uv_index,wind_speed_10m,wind_gusts_10m&past_hours=3&forecast_hours=48" +
+    "&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,snowfall,snow_depth,weather_code,is_day,uv_index,wind_speed_10m,wind_gusts_10m&past_hours=4&forecast_hours=48" +
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max" +
     "&timezone=auto&timeformat=unixtime&forecast_days=16" + U().qs;
   try {
@@ -646,12 +671,14 @@ function renderNow(w) {
   $("headsup").innerHTML = headsUp(w);
 }
 
-// Layered clothing advice for heading out, from now through the next few hours (set points in state.wear):
+// Layered clothing advice for the time outside: now through now + walk hours (set points in state.wear).
+// Open-Meteo hourly precipitation, chance and weather code describe the hour *ending* at each timestamp;
+// temperature, wind and UV are values at the timestamp.
 //   Headwear:   Gore-Tex in steadier rain/snow, a cap for sun or light/possible showers, else None
 //   Shell:      Gore-Tex if precipitation is expected, Soft Shell if showers are possible or it's windy, else None
 //   Insulation: by the coldest "feels like" temperature in the window
 //   Pants:      Shell when moderate rain or heavier is expected (rate set point, or a moderate+ forecast code)
-//   Visibility: Hi-Viz (shown only then) when a walk starting now would be out between sunset and sunrise
+//   Visibility: Hi-Viz when any part of the time out falls between sunset and sunrise
 //   Footwear:   Gore-Tex if it's wet out, the ground is still wet from recent rain, or there's snow on the ground
 function whatToWear(w) {
   const h = w.hourly, c = w.current, us = state.units === "us", S = state.wear;
@@ -662,36 +689,38 @@ function whatToWear(w) {
   const FT = us ? (x) => x : (x) => x * 3.281;
   const MODERATE_CODES = [63, 65, 66, 67, 73, 75, 81, 82, 86, 95, 96, 99];
 
-  const i0 = hourStart(), hours = [];
-  for (let i = i0; i < Math.min(i0 + S.hours + 1, h.time.length); i++) hours.push(i);
+  const now = Date.now() / 1000, end = now + S.walk * 3600, all = h.time.map((_, i) => i);
+  const hours = all.filter((i) => h.time[i] > now - 3600 && h.time[i] <= end);        // samples around the time out
+  const accum = all.filter((i) => h.time[i] > now && h.time[i] < end + 3600);         // hours overlapping the time out
+  const past = all.filter((i) => h.time[i] > now - 3 * 3600 && h.time[i] <= now);    // the last three full hours
 
   const chance = (i) => h.precipitation_probability[i] ?? 0;
-  const likely = hours.filter((i) => chance(i) >= S.likely);
+  const likely = accum.filter((i) => chance(i) >= S.likely);
   const nowRate = IN(c.precipitation) * (3600 / (c.interval || 900));   // current value covers the last 15 minutes
   const r2 = (x) => Math.round(x * 100) / 100;   // compare at the precision shown on screen (0.01 in)
   const peak = r2(Math.max(nowRate, ...likely.map((i) => IN(h.precipitation[i] ?? 0))));
   const codes = [c.weather_code, ...likely.map((i) => h.weather_code[i])];
   const wetNow = peak >= S.goreRate || c.weather_code >= 51;
   const moderate = peak >= S.pantsRate || codes.some((k) => MODERATE_CODES.includes(k));
-  const possible = hours.some((i) => chance(i) >= S.softChance && h.weather_code[i] >= 51);
-  const pastRain = r2(h.precipitation.slice(Math.max(0, i0 - 3), i0).reduce((a, b) => a + IN(b || 0), 0));
+  const possible = accum.some((i) => chance(i) >= S.softChance && h.weather_code[i] >= 51);
+  const pastRain = r2(past.reduce((a, i) => a + IN(h.precipitation[i] || 0), 0));
   const groundWet = pastRain >= S.wetGround;
-  const snowGround = FT(h.snow_depth[i0] ?? 0) >= 0.05;
+  const snowGround = FT(h.snow_depth[hours[0]] ?? 0) >= 0.05;
   const wind = MPH(Math.max(c.wind_speed_10m, ...hours.map((i) => h.wind_speed_10m[i] ?? 0)));
   const feels = hours.map((i) => h.apparent_temperature[i]).concat(c.apparent_temperature);
   const fMin = Math.min(...feels), fMax = Math.max(...feels), coldest = F(fMin);
   const snowy = codes.some((k) => [71, 73, 75, 77, 85, 86].includes(k));
   const uv = Math.max(c.uv_index ?? 0, ...hours.map((i) => h.uv_index?.[i] ?? 0));
 
-  // Darkness: before that day's sunrise or after its sunset. A walk (≤ 3 hrs) can't span a whole day,
+  // Darkness: before that day's sunrise or after its sunset. The time out (≤ 3 hrs) can't span a whole day,
   // so checking its start and end is enough.
-  const d = w.daily, now = Date.now() / 1000, walkEnd = now + S.walk * 3600;
+  const d = w.daily;
   const isDark = (t) => {
     let i = 0;
     while (i + 1 < d.time.length && d.time[i + 1] <= t) i++;
     return t < d.sunrise[i] || t >= d.sunset[i];
   };
-  const darkNow = isDark(now), dark = darkNow || isDark(walkEnd);
+  const darkNow = isDark(now), dark = darkNow || isDark(end);
   const nextSunset = d.sunset.find((t) => t > now);
 
   return {
@@ -702,7 +731,7 @@ function whatToWear(w) {
     feet: wetNow || groundWet || snowGround ? "Gore-Tex" : "Light",
     viz: dark ? "Hi-Viz" : null,
     why: [
-      `Next ${S.hours} hr${S.hours > 1 ? "s" : ""}: feels ${r(fMin)}°${r(fMax) !== r(fMin) ? "–" + r(fMax) + "°" : ""}`,
+      `Feels ${r(fMin)}°${r(fMax) !== r(fMin) ? "–" + r(fMax) + "°" : ""}`,
       wetNow && peak > 0 && `${snowy ? "snow" : "rain"} up to ${fmtWear(peak, "rate")}`,
       !wetNow && possible && "showers possible",
       wind >= S.softWind && `wind ${fmtWear(wind, "wind")}`,
@@ -735,9 +764,26 @@ const vest = (on) => '<svg viewBox="0 0 24 24" aria-hidden="true">' +
   (on ? "" : '<path d="M3 3 21 21M21 3 3 21" stroke="#8a9aab" stroke-width="1.8" stroke-linecap="round"/>') + "</svg>";
 
 function renderWear() {
-  const x = whatToWear(state.wx);
-  $("wear").innerHTML = wearHTML(x);
+  const n = state.wear.walk;
+  $("walk-btn").textContent = `Out for ${n} hr${n > 1 ? "s" : ""}`;
+  if (state.wx) $("wear").innerHTML = wearHTML(whatToWear(state.wx));
 }
+
+// Quick picker on the main panel: how long you'll be outside (applies to every layer).
+if (!state.walks.includes(state.wear.walk)) state.wear.walk = WEAR_DEFAULTS.walk;
+$("walk-btn").onclick = () => {
+  document.querySelectorAll("#walk-options button").forEach((b) => b.classList.toggle("on", +b.dataset.walk === state.wear.walk));
+  $("walk-dialog").showModal();
+};
+$("walk-dialog").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-walk]");
+  if (b) {
+    state.wear.walk = +b.dataset.walk;
+    store.set("wear", state.wear);
+    renderWear();
+  }
+  if (b || e.target === $("walk-dialog")) $("walk-dialog").close();   // a pick, or a tap outside the box
+});
 
 function wearHTML(x) {
   const tile = (k, v, cls) => `<div class="w ${cls}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
