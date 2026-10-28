@@ -71,6 +71,7 @@
   .clock .date { font-size: 0.75rem; color: var(--muted); }
   .icon-btn { width: 2.3rem; height: 2.3rem; border-radius: 50%; display: grid; place-items: center; color: var(--muted); background: var(--panel); }
   .icon-btn svg { width: 1.15rem; height: 1.15rem; }
+  .icon-btn.on { color: #04121e; background: var(--accent); }
 
   /* ---------- alerts ---------- */
   .alerts:empty { display: none; }
@@ -290,6 +291,9 @@
       <div class="time" id="clock-time">--:--</div>
       <div class="date" id="clock-date"></div>
     </div>
+    <button class="icon-btn" id="speak" aria-label="Read the weather aloud" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+    </button>
     <button class="icon-btn" id="open-settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
@@ -992,7 +996,7 @@ function hourStart() {
 }
 
 // A short, plain-language summary of what matters in the next ~18 hours — the "do I need a coat/umbrella" line.
-function headsUp(w) {
+function headsUp(w, hr = fHour) {
   const h = w.hourly, i0 = hourStart(), end = Math.min(i0 + 18, h.time.length), u = U();
   const notes = [];
 
@@ -1003,11 +1007,11 @@ function headsUp(w) {
   for (let i = i0 + 1; i < end; i++) if (wet(i) !== nowWet) { change = i; break; }
   if (!nowWet && change > 0) {
     const kind = wxInfo(h.weather_code[change]).label.toLowerCase();
-    notes.push(`<strong>${cap(kind)}</strong> likely around ${fHour(h.time[change])} (${h.precipitation_probability[change]}%)`);
+    notes.push(`<strong>${cap(kind)}</strong> likely around ${hr(h.time[change])} (${h.precipitation_probability[change]}%)`);
   } else if (nowWet && change > 0) {
-    notes.push(`Precipitation should <strong>end around ${fHour(h.time[change])}</strong>`);
+    notes.push(`Precipitation should <strong>end around ${hr(h.time[change])}</strong>`);
   } else if (nowWet) {
-    notes.push(`<strong>Wet</strong> through at least ${fHour(h.time[end - 1])}`);
+    notes.push(`<strong>Wet</strong> through at least ${hr(h.time[end - 1])}`);
   }
 
   // snow accumulation
@@ -1021,11 +1025,11 @@ function headsUp(w) {
   const lo = Math.min(...temps), hi = Math.max(...temps);
   if (cur > freezing && lo <= freezing) {
     const j = temps.findIndex((t) => t <= freezing);
-    notes.push(`<strong>Below freezing</strong> by ${fHour(h.time[i0 + j])}`);
+    notes.push(`<strong>Below freezing</strong> by ${hr(h.time[i0 + j])}`);
   } else if (hi - cur >= 12 * (state.units === "us" ? 1 : 5 / 9)) {
     notes.push(`Warming to <strong>${r(hi)}°</strong>`);
   } else if (cur - lo >= 15 * (state.units === "us" ? 1 : 5 / 9)) {
-    notes.push(`Dropping to <strong>${r(lo)}°</strong> by ${fHour(h.time[i0 + temps.indexOf(lo)])}`);
+    notes.push(`Dropping to <strong>${r(lo)}°</strong> by ${hr(h.time[i0 + temps.indexOf(lo)])}`);
   }
 
   // wind
@@ -1036,6 +1040,55 @@ function headsUp(w) {
     notes.push("No umbrella needed today");
 
   return notes.join(" · ");
+}
+
+/* ---------- spoken summary: conditions, alerts, heads-up and what to wear, read aloud on tap ---------- */
+function spokenSummary() {
+  const w = state.wx, c = w.current, d = w.daily, ti = todayIndex(), x = state.wearNow;
+  const deg = (t) => `${r(t)} degrees`;
+  const list = (items) => new Intl.ListFormat("en", { type: "conjunction" }).format(items);
+  const parts = [`It's ${deg(c.temperature_2m)} and ${wxInfo(c.weather_code).label.toLowerCase()}` +
+    (Math.abs(c.apparent_temperature - c.temperature_2m) >= 3 ? `, feeling like ${deg(c.apparent_temperature)}.` : ".") +
+    ` Today's high ${deg(d.temperature_2m_max[ti])}, low ${deg(d.temperature_2m_min[ti])}.`];
+
+  const alerts = [...document.querySelectorAll("#alerts .alert b")].map((b) => b.textContent);
+  if (alerts.length) parts.push(`Active alert${alerts.length > 1 ? "s" : ""}: ${list(alerts)}.`);
+
+  // Same heads-up as on screen, with spoken hours ("6 PM", not "6p") and units spelled out
+  const notes = headsUp(w, (s) => fmt({ hour: "numeric" }).format(s * 1000))
+    .replace(/<[^>]+>/g, "").replace(/°/g, " degrees").replace(/(\d) in\b/g, "$1 inches").replace(/ mph\b/g, " miles per hour");
+  if (notes) parts.push(notes.split(" · ").join(". ") + ".");
+
+  if (x) {
+    const n = state.wear.walk;
+    const wear = [
+      { "Gore-Tex": "a Gore-Tex hat", Insulated: "an insulated hat", Cap: "a cap" }[x.head],
+      { "Gore-Tex": "a Gore-Tex shell", "Soft Shell": "a soft shell" }[x.shell],
+      { Light: "light insulation", Medium: "medium insulation", Heavy: "heavy insulation and gloves" }[x.insulation],
+      x.pants === "Gore-Tex" && "shell pants",
+      { "Yak Trax": "Yak Trax", "Gore-Tex": "Gore-Tex footwear" }[x.feet],
+      x.viz && "a hi-viz vest",
+    ].filter(Boolean);
+    parts.push(`For ${n} hour${n > 1 ? "s" : ""} out, ` + (wear.length ? `wear ${list(wear)}.` : "no extra layers needed."));
+  }
+  return parts.join(" ");
+}
+
+// Tap to hear the summary; tap again to stop.
+if ("speechSynthesis" in window) {
+  const btn = $("speak");
+  btn.hidden = false;
+  btn.onclick = () => {
+    const synth = speechSynthesis;
+    if (synth.speaking) { synth.cancel(); btn.classList.remove("on"); return; }
+    if (!state.wx) return;
+    renderWear();   // make sure the advice reflects this minute
+    const u = new SpeechSynthesisUtterance(spokenSummary());
+    u.lang = "en-US";
+    u.onend = u.onerror = () => btn.classList.remove("on");
+    btn.classList.add("on");
+    synth.speak(u);
+  };
 }
 
 /* ---------- forecast strip: all three views are pre-rendered so taps switch instantly ---------- */
