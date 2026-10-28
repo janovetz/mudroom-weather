@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b1016">
+<meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,10 +20,14 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root {
-    --bg: #0b1016;
-    --panel: #121a23;
-    --panel-2: #18222e;
-    --line: #233140;
+    /* Mostly pure black for OLED/LED power savings: surfaces are #000 and get their
+       definition from hairline --edge outlines; --panel-2 is a barely-lit fill kept
+       only for tappable things (tiles, pills, buttons, the "Now" cell). */
+    --bg: #000;
+    --panel: #000;
+    --panel-2: #0b1015;
+    --edge: #1c2631;      /* 1px outlines around cards, tiles, popups */
+    --line: #2a3a4b;      /* brighter rule: tracks, dots, input/popup borders */
     --text: #e8eef4;
     --muted: #8a9aab;
     --faint: #5b6b7c;
@@ -69,9 +73,9 @@
   .clock { margin-left: auto; text-align: right; line-height: 1.1; }
   .clock .time { font-size: 1.5rem; font-weight: 300; letter-spacing: -0.02em; }
   .clock .date { font-size: 0.75rem; color: var(--muted); }
-  .icon-btn { width: 2.3rem; height: 2.3rem; border-radius: 50%; display: grid; place-items: center; color: var(--muted); background: var(--panel); }
+  .icon-btn { width: 2.3rem; height: 2.3rem; border-radius: 50%; display: grid; place-items: center; color: var(--muted); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); }
   .icon-btn svg { width: 1.15rem; height: 1.15rem; }
-  .icon-btn.on { color: #04121e; background: var(--accent); }
+  .icon-btn.on { color: #04121e; background: var(--accent); box-shadow: none; }
   .icon-btn[hidden] { display: none; }
   .speak-btn { width: 3.6rem; height: 3.6rem; margin-left: auto; flex: none; background: var(--panel-2); color: var(--accent); }
   .speak-btn svg { width: 1.8rem; height: 1.8rem; }
@@ -82,10 +86,10 @@
   .alert {
     display: block; width: 100%; text-align: left;
     border-radius: 12px; padding: 9px 14px;
-    background: color-mix(in srgb, var(--warn) 18%, var(--panel));
+    background: color-mix(in srgb, var(--warn) 20%, var(--panel));
     border-left: 5px solid var(--warn);
   }
-  .alert.severe { background: color-mix(in srgb, var(--danger) 22%, var(--panel)); border-left-color: var(--danger); }
+  .alert.severe { background: color-mix(in srgb, var(--danger) 25%, var(--panel)); border-left-color: var(--danger); }
   .alert b { font-weight: 650; }
   .alert span { color: var(--muted); font-size: 0.85rem; margin-left: 8px; }
   .alert p { margin: 8px 0 0; font-size: 0.85rem; line-height: 1.45; white-space: pre-wrap; display: none; max-height: 40vh; overflow: auto; }
@@ -94,7 +98,7 @@
   /* ---------- main: conditions 1/3, radar 2/3 ---------- */
   .main { flex: 1 1 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--gap); min-height: 0; }
   header, .alerts, .forecast { flex: none; }
-  .card { background: var(--panel); border-radius: var(--radius); padding: 18px 20px; min-height: 0; }
+  .card { background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); padding: 18px 20px; min-height: 0; }
 
   .now { display: flex; flex-direction: column; gap: 1rem; overflow: hidden; }
   .now-top { display: flex; align-items: center; gap: 0.6rem; }
@@ -104,19 +108,20 @@
   .now-temp sup { font-size: 0.38em; font-weight: 300; vertical-align: 1em; margin-left: 2px; color: var(--muted); }
   .now-desc { font-size: 1.3rem; font-weight: 500; }
   .now-sub { color: var(--muted); font-size: 0.95rem; margin-top: 3px; }
-  .headsup { font-size: 0.92rem; line-height: 1.45; padding: 10px 14px; border-radius: 12px; background: var(--panel-2); }
+  .headsup { font-size: 0.92rem; line-height: 1.45; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--edge); }
   .headsup:empty { display: none; }
   .headsup strong { color: var(--accent); font-weight: 600; }
+  .headsup strong.paws { color: var(--danger); }
   .wear { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }   /* upper body / lower body + hi-viz */
-  .wear .w { background: var(--panel-2); border-radius: 12px; padding: 8px 10px; min-width: 0; }
+  .wear .w { background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); border-radius: 12px; padding: 8px 10px; min-width: 0; }
   .wear .w.viz { display: flex; align-items: center; justify-content: center; }
-  .wear .w.viz.on { background: color-mix(in srgb, #d7ff3a 16%, var(--panel-2)); }
+  .wear .w.viz.on { background: color-mix(in srgb, #d7ff3a 18%, var(--panel-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, #d7ff3a 40%, transparent); }
   .wear .w.viz svg { width: 2.1rem; height: 2.1rem; display: block; }
   .wear .k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.62rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
   .wear .v { font-size: 0.98rem; font-weight: 600; margin-top: 2px; line-height: 1.2; }
   .wear .w.off .v { color: var(--faint); font-weight: 400; }
   .wear .w.wet .v { color: var(--rain); }
-  .wear .w.ice { background: color-mix(in srgb, #a8e4ff 14%, var(--panel-2)); }
+  .wear .w.ice { background: color-mix(in srgb, #a8e4ff 16%, var(--panel-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, #a8e4ff 40%, transparent); }
   .wear .w.ice .v { color: #a8e4ff; }
   .wear-block { display: grid; gap: 6px; position: relative; }
   .wear .w[data-layer] { cursor: pointer; }
@@ -124,26 +129,26 @@
   .wear .w.sel { box-shadow: inset 0 0 0 2px var(--accent); }
   .wear-tip {
     position: absolute; z-index: 20; width: min(19rem, 100%);
-    background: #1f2b38; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+    background: #0b1117; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
     font-size: 0.85rem; line-height: 1.45; color: var(--muted); box-shadow: 0 10px 28px rgba(0,0,0,.55);
   }
   .wear-tip[hidden] { display: none; }
   .wear-tip b { display: block; color: var(--text); margin-bottom: 3px; }
   .wear-tip::before {   /* arrow pointing at the tapped tile */
     content: ""; position: absolute; top: -6px; left: calc(var(--ax, 50%) - 6px); width: 10px; height: 10px;
-    background: #1f2b38; border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: rotate(45deg);
+    background: #0b1117; border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: rotate(45deg);
   }
   .wear-head { display: flex; align-items: center; gap: 8px; }
   .wear-head .lbl { font-size: 0.68rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
-  .walk-btn { margin-left: auto; padding: 5px 12px; border-radius: 999px; background: var(--panel-2); font-size: 0.82rem; font-weight: 600; color: var(--accent); }
+  .walk-btn { margin-left: auto; padding: 5px 12px; border-radius: 999px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); font-size: 0.82rem; font-weight: 600; color: var(--accent); }
   .walk-btn::after { content: ""; display: inline-block; margin-left: 6px; border: 4px solid transparent; border-top-color: currentColor; vertical-align: -1px; }
   .walk-btn:active { background: var(--line); }
   #walk-dialog { width: fit-content; }   /* dialogs are pinned to both edges, so "auto" would stretch full width */
   .walk-pick { padding: 18px 20px 20px; display: grid; gap: 14px; text-align: center; }
   .walk-pick .t { font-size: 1rem; font-weight: 600; }
   .walk-pick .row3 { display: grid; grid-template-columns: repeat(3, 5.5rem); gap: 10px; }
-  .walk-pick button { padding: 16px 0; border-radius: 14px; background: var(--panel-2); font-size: 1.1rem; font-weight: 600; }
-  .walk-pick button.on { background: var(--accent); color: #04121e; }
+  .walk-pick button { padding: 16px 0; border-radius: 14px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); font-size: 1.1rem; font-weight: 600; }
+  .walk-pick button.on { background: var(--accent); color: #04121e; box-shadow: none; }
   .wear .why { grid-column: 1 / -1; font-size: 0.72rem; color: var(--faint); margin-top: -2px; }
   .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
   .stat .k { font-size: 0.68rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
@@ -154,11 +159,11 @@
 
   /* ---------- radar ---------- */
   .radar { position: relative; padding: 0; overflow: hidden; }
-  #map { position: absolute; inset: 0; background: #0d141c; cursor: pointer; }
-  .leaflet-container { background: #0d141c; font: inherit; }
-  .leaflet-control-attribution { background: rgba(11,16,22,.7) !important; color: var(--faint) !important; font-size: 9px !important; }
+  #map { position: absolute; inset: 0; background: #000; cursor: pointer; }
+  .leaflet-container { background: #000; font: inherit; }
+  .leaflet-control-attribution { background: rgba(0,0,0,.65) !important; color: var(--faint) !important; font-size: 9px !important; }
   .leaflet-control-attribution a { color: var(--muted) !important; }
-  .overlay { position: absolute; z-index: 500; background: rgba(11,16,22,.78); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-radius: 12px; }
+  .overlay { position: absolute; z-index: 500; background: rgba(0,0,0,.72); border: 1px solid var(--edge); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-radius: 12px; }
   .radar-bar { left: 12px; bottom: 12px; display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; width: min(420px, calc(100% - 24px)); }
   .radar-bar .icon-btn { width: 2rem; height: 2rem; background: transparent; color: var(--text); }
   .radar-time { font-size: 0.85rem; min-width: 4.8em; }
@@ -176,7 +181,7 @@
   .home-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 3px solid #fff; box-shadow: 0 0 0 4px rgba(108,196,255,.35); }
 
   /* tap radar → full page */
-  body.radar-full .radar { position: fixed; inset: 0; z-index: 800; border-radius: 0; }
+  body.radar-full .radar { position: fixed; inset: 0; z-index: 800; border-radius: 0; border: 0; }
   body.radar-full .radar-title { padding: 8px 14px; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); }
   body.radar-full .radar-title .label { display: none; }
   body.radar-full .radar-title .full { display: block; }
@@ -203,7 +208,7 @@
     background: var(--rain); opacity: .14; border-radius: 4px 4px 0 0;
   }
   .cell > * { position: relative; }
-  .cell.first { background: var(--panel-2); }
+  .cell.first { background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); }
   .cell .t { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
   .cell.first .t { color: var(--text); font-weight: 600; }
   .cell svg.wx { width: 1.75rem; height: 1.75rem; }
@@ -212,12 +217,12 @@
   .cell .p { font-size: 0.66rem; color: var(--rain); min-height: 1.1em; }
 
   /* ---------- settings ---------- */
-  dialog { border: 0; padding: 0; background: var(--panel); color: var(--text); border-radius: var(--radius); width: min(820px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; }
+  dialog { border: 1px solid var(--line); padding: 0; background: var(--panel); color: var(--text); border-radius: var(--radius); width: min(820px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; }
   .settings-top { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px 24px; }
   .settings h4 { margin: 0 0 8px; font-size: 0.8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; display: flex; align-items: center; }
   .settings h4 button { margin-left: auto; font-size: 0.75rem; color: var(--accent); text-transform: none; letter-spacing: 0; font-weight: 500; padding: 4px 8px; }
   .wear-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .wear-group { background: var(--panel-2); border-radius: 12px; padding: 12px 14px 6px; }
+  .wear-group { border: 1px solid var(--edge); border-radius: 12px; padding: 12px 14px 6px; }
   .wear-group h5 { margin: 0 0 6px; font-size: 0.9rem; }
   .slider { padding: 6px 0 8px; }
   .slider .lbl { display: flex; gap: 8px; font-size: 0.8rem; color: var(--muted); }
@@ -243,17 +248,17 @@
   .multi-read span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--c); margin-right: 5px; }
   .multi-read b { color: var(--text); font-weight: 600; }
   @media (max-width: 760px) { .settings-top, .wear-groups { grid-template-columns: 1fr; } }
-  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog::backdrop { background: rgba(0,0,0,.75); }
   .settings { padding: 20px; display: grid; gap: 16px; user-select: text; }
   .settings h3 { margin: 0; font-size: 1.1rem; }
   .settings label { font-size: 0.8rem; color: var(--muted); display: block; margin-bottom: 6px; }
   .settings input[type=search] { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
   .results { display: grid; gap: 4px; margin-top: 6px; }
-  .results button { text-align: left; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); font-size: 0.9rem; }
+  .results button { text-align: left; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); font-size: 0.9rem; }
   .results button small { color: var(--muted); }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .pill { padding: 8px 14px; border-radius: 10px; background: var(--panel-2); font-size: 0.9rem; }
-  .pill.on { background: var(--accent); color: #04121e; font-weight: 600; }
+  .pill { padding: 8px 14px; border-radius: 10px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); font-size: 0.9rem; }
+  .pill.on { background: var(--accent); color: #04121e; font-weight: 600; box-shadow: none; }
   .settings .done { justify-self: end; padding: 8px 18px; border-radius: 10px; background: var(--accent); color: #04121e; font-weight: 600; }
   .hint { font-size: 0.75rem; color: var(--faint); line-height: 1.4; }
 
@@ -394,6 +399,7 @@
       <label>Display</label>
       <div class="row">
         <button type="button" class="pill" id="dim-toggle">Dim at night</button>
+        <button type="button" class="pill" id="pet-toggle">Pet Mode</button>
       </div>
     </div>
     </div>
@@ -435,6 +441,8 @@ const WEAR_DEFAULTS = {
   dryHalf: 4,        // past rain's effect on the ground halves every this many hours
   iceTemp: 32,       // Yak Trax when the ground surface is at or below this (°F) and there's moisture to freeze
   dimMins: 15,       // Hi-Viz from this many minutes before sunset until this many after sunrise
+  pawsAir: 77,       // Pet Mode: Hot Paws warning when the air reaches this (°F)…
+  pawsGround: 115,   // …or the ground surface reaches this (°F)
   walk: 1,           // time outside, starting now (1, 2 or 3 hrs) — picked on the main panel
 };
 const WEAR_SLIDERS = [
@@ -462,6 +470,10 @@ const WEAR_SLIDERS = [
   ["Visibility", [
     ["dimMins", "Hi-Viz from before sunset / after sunrise", 0, 60, 5, "mins"],
   ]],
+  ["Pet Mode (Hot Paws)", [
+    ["pawsAir", "Warn when air temperature ≥", 65, 95, 1, "temp"],
+    ["pawsGround", "…or ground surface ≥", 90, 140, 1, "temp"],
+  ]],
   ["Forecast", [
     ["likely", "Count rain/snow as expected at chance ≥", 10, 90, 5, "pct"],
   ]],
@@ -483,6 +495,7 @@ const state = {
   loc: null,                       // {lat, lon, name}
   units: store.get("units", "us"),
   dim: store.get("dim", true),
+  pet: store.get("pet", false),
   wear: migrateWear({ ...WEAR_DEFAULTS, ...store.get("wear", {}) }),
   walks: [1, 2, 3],
   view: VIEWS.includes(store.get("view")) ? store.get("view") : "hourly",
@@ -751,7 +764,6 @@ function renderNow(w) {
   ];
   $("stats").innerHTML = stats.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
   renderWear();
-  $("headsup").innerHTML = headsUp(w);
 }
 
 // Layered clothing advice for the time outside: now through now + walk hours (set points in state.wear).
@@ -918,6 +930,7 @@ function renderWear() {
   if (!state.wx) return;
   state.wearNow = whatToWear(state.wx);
   $("wear").innerHTML = wearHTML(state.wearNow);
+  $("headsup").innerHTML = headsUp(state.wx);   // Hot Paws follows the time out too
   if (tip.layer) fillTip();   // keep an open popup current across the minute-by-minute refresh
 }
 
@@ -998,10 +1011,23 @@ function hourStart() {
   return i < 0 ? 0 : i;
 }
 
+// Pet Mode: pavement can burn paws long before the air feels hot. Checks the time out, like what to wear,
+// against the air temperature and the model's ground-surface temperature.
+function hotPaws(w) {
+  if (!state.pet) return false;
+  const h = w.hourly, S = state.wear, F = state.units === "us" ? (t) => t : (t) => t * 9 / 5 + 32;
+  const now = Date.now() / 1000, end = now + S.walk * 3600;
+  const hours = h.time.map((_, i) => i).filter((i) => h.time[i] > now - 3600 && h.time[i] <= end);
+  const air = Math.max(F(w.current.temperature_2m), ...hours.map((i) => F(h.temperature_2m[i])));
+  const ground = Math.max(-Infinity, ...hours.map((i) => F(h.soil_temperature_0cm?.[i] ?? -Infinity)));
+  return air >= S.pawsAir || ground >= S.pawsGround;
+}
+
 // A short, plain-language summary of what matters in the next ~18 hours — the "do I need a coat/umbrella" line.
 function headsUp(w, hr = fHour) {
   const h = w.hourly, i0 = hourStart(), end = Math.min(i0 + 18, h.time.length), u = U();
   const notes = [];
+  if (hotPaws(w)) notes.push('<strong class="paws">Hot Paws Warning - Check pavement temperature!</strong>');
 
   // precipitation: when does it start (or stop)?
   const wet = (i) => h.precipitation_probability[i] >= 50 && h.weather_code[i] >= 51;
@@ -1060,7 +1086,7 @@ function spokenSummary() {
   const notes = headsUp(w, (s) => fmt({ hour: "numeric" }).format(s * 1000))
     .replace(/<[^>]+>/g, "").replace(/°/g, "").replace(/(\d) in\b/g, "$1 inches").replace(/ mph\b/g, " miles per hour")
     .split(" · ").filter((n) => n && !/umbrella/i.test(n));
-  if (notes.length) parts.push(notes.join(". ") + ".");
+  if (notes.length) parts.push(notes.map((n) => /[.!?]$/.test(n) ? n : n + ".").join(" "));
 
   if (x) {
     const n = state.wear.walk;
@@ -1347,6 +1373,7 @@ async function keepAwake() {
 function syncSettingsUI() {
   document.querySelectorAll("#units .pill").forEach((b) => b.classList.toggle("on", b.dataset.u === state.units));
   $("dim-toggle").classList.toggle("on", state.dim);
+  $("pet-toggle").classList.toggle("on", state.pet);
   syncWearSliders();
 }
 
@@ -1440,6 +1467,7 @@ $("units").addEventListener("click", (e) => {
   setLocation(state.loc);   // re-keys the cache and refetches in the new units
 });
 $("dim-toggle").onclick = () => { state.dim = !state.dim; store.set("dim", state.dim); syncSettingsUI(); applyDim(); };
+$("pet-toggle").onclick = () => { state.pet = !state.pet; store.set("pet", state.pet); syncSettingsUI(); if (state.wx) renderWear(); };
 $("open-settings").onclick = () => {
   syncSettingsUI();
   // Shows what the browser actually gives the page, in CSS pixels — handy when sizing for a specific tablet.
