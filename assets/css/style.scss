@@ -1,0 +1,58 @@
+---
+---
+
+// GitHub Pages stylesheet for the docs: the default Primer theme, re-colored to match the app's black theme.
+@import "jekyll-theme-primer";
+
+$bg: #000;
+$panel: #0b1015;
+$edge: #1c2631;
+$line: #2a3a4b;
+$text: #e8eef4;
+$muted: #8a9aab;
+$faint: #5b6b7c;
+$accent: #6cc4ff;
+
+:root { color-scheme: dark; }
+
+body {
+  background: $bg;
+  color: $text;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.markdown-body {
+  color: $text;
+  max-width: 980px;
+
+  a { color: $accent; }
+
+  // the theme's site-title heading becomes a small link back to the app
+  > h1:first-child {
+    font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;
+    border: 0; margin-bottom: 1.5rem;
+    a { color: $muted; }
+  }
+
+  h1, h2 { border-bottom-color: $edge; }
+  h6 { color: $muted; }
+  hr { background-color: $edge; }
+  blockquote { color: $muted; border-left-color: $line; }
+  strong { color: #fff; }
+
+  code { background: $panel; color: $text; border: 1px solid $edge; }
+  pre, .highlight pre { background: $panel; border: 1px solid $edge; color: $text; }
+  pre code { border: 0; }
+
+  table {
+    tr { background: $bg; border-top-color: $edge; }
+    tr:nth-child(2n) { background: $panel; }
+    th, td { border-color: $edge; }
+    th { color: $text; }
+  }
+
+  kbd { background: $panel; color: $text; border-color: $line; box-shadow: none; }
+}
+
+.footer { border-top-color: $edge; color: $faint; }
