@@ -259,7 +259,29 @@
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .pill { padding: 8px 14px; border-radius: 10px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); font-size: 0.9rem; }
   .pill.on { background: var(--accent); color: #04121e; font-weight: 600; box-shadow: none; }
-  .settings .done { justify-self: end; padding: 8px 18px; border-radius: 10px; background: var(--accent); color: #04121e; font-weight: 600; }
+  .settings .done, .about .done { padding: 8px 18px; border-radius: 10px; background: var(--accent); color: #04121e; font-weight: 600; }
+  .settings-foot { display: flex; align-items: center; gap: 10px; }
+  .settings-foot .done { margin-left: auto; }
+
+  /* ---------- about ---------- */
+  #about { width: min(560px, calc(100vw - 32px)); }
+  .about { user-select: text; }
+  .about figure { position: relative; margin: 0; }
+  .about img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; background: var(--panel-2); }
+  .about figcaption {
+    position: absolute; left: 14px; bottom: 12px; padding: 4px 12px; border-radius: 999px;
+    background: rgba(0,0,0,.6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    font-size: 0.85rem; font-weight: 600; letter-spacing: .02em;
+  }
+  .about-body { padding: 18px 22px 20px; display: grid; gap: 12px; }
+  .about h3 { margin: 0; font-size: 1.35rem; font-weight: 600; }
+  .about p { margin: 0; font-size: 0.92rem; line-height: 1.5; color: var(--muted); }
+  .about p.hint { font-size: 0.75rem; color: var(--faint); }
+  .about-links { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.9rem; }
+  .about-links a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .about-foot { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+  .about-foot .ver { font-size: 0.75rem; color: var(--faint); }
+  .about-foot .done { margin-left: auto; }
   .hint { font-size: 0.75rem; color: var(--faint); line-height: 1.4; }
   .hint a { color: var(--accent); }
 
@@ -376,6 +398,28 @@
   </div>
 </dialog>
 
+<dialog id="about" aria-labelledby="about-title">
+  <form class="about" method="dialog">
+    <figure>
+      <img src="about-maggie.jpg" width="1200" height="800" alt="Maggie, a black dog with white paws, lying on a carpeted hallway" loading="lazy">
+      <figcaption>Maggie</figcaption>
+    </figure>
+    <div class="about-body">
+      <h3 id="about-title">Mudroom Weather</h3>
+      <p>A fast, ad-free weather display for the mudroom: current conditions, radar, alerts, the forecast, and what to wear before heading out. Tap the speaker to hear it, and the gear for settings, including Pet Mode.</p>
+      <div class="about-links">
+        <a href="https://janovetz.github.io/mudroom-weather/docs/" target="_blank" rel="noopener">Documentation</a>
+        <a href="https://github.com/janovetz/mudroom-weather" target="_blank" rel="noopener">Source on GitHub</a>
+      </div>
+      <p class="hint">Data: Open-Meteo, National Weather Service, Iowa Environmental Mesonet, RainViewer, Esri.</p>
+      <div class="about-foot">
+        <span class="ver" id="about-ver"></span>
+        <button class="done" value="done">Got it</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="settings">
   <form class="settings" method="dialog">
     <h3>Settings</h3>
@@ -412,7 +456,10 @@
     <p class="hint" id="screen-info"></p>
     <p class="hint">Tip: bookmark a fixed location with <code>?lat=…&amp;lon=…&amp;name=Home</code>. Data: Open-Meteo, NWS, Iowa Environmental Mesonet, RainViewer, Esri.
       <a href="https://janovetz.github.io/mudroom-weather/docs/" target="_blank" rel="noopener">Documentation</a></p>
-    <button class="done" value="done">Done</button>
+    <div class="settings-foot">
+      <button type="button" class="pill" id="open-about">About</button>
+      <button class="done" value="done">Done</button>
+    </div>
   </form>
 </dialog>
 
@@ -1506,6 +1553,21 @@ document.addEventListener("visibilitychange", () => {
   if (radar.map) radar.load();
 });
 
+/* ================= about ================= */
+// Version = when this copy of the page was built: GitHub Pages sends the deploy time as Last-Modified.
+function buildVersion() {
+  const v = new Date(document.lastModified), p = (n) => String(n).padStart(2, "0");
+  return isNaN(v) ? "" : `Version ${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())} ${p(v.getHours())}:${p(v.getMinutes())}`;
+}
+function showAbout() {
+  $("about-ver").textContent = buildVersion();
+  $("about").showModal();
+}
+// Shown until dismissed once (Got it, Esc or a tap outside); Settings → About brings it back.
+$("about").addEventListener("close", () => store.set("aboutSeen", true));
+$("about").addEventListener("click", (e) => { if (e.target === $("about")) $("about").close(); });
+$("open-about").onclick = showAbout;
+
 /* ================= boot ================= */
 tickClock();
 setInterval(tickClock, 1000);
@@ -1529,9 +1591,12 @@ else {
   geolocate().then(setLocation, () => {
     $("loading").hidden = true;
     syncSettingsUI();
-    $("settings").showModal();
+    // open location search once the About box (if showing) is dismissed
+    if ($("about").open) $("about").addEventListener("close", () => $("settings").showModal(), { once: true });
+    else $("settings").showModal();
   });
 }
+if (!store.get("aboutSeen", false)) showAbout();
 updateStatus();
 document.addEventListener("DOMContentLoaded", () => { if (state.loc && !radar.map) radar.init(); });
 </script>

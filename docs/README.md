@@ -181,6 +181,10 @@ Open with ⚙. Changes apply immediately and are saved in the browser (`localSto
 
 The bottom of the dialog shows the page size in CSS and device pixels, which helps when sizing for a specific tablet, and links to this documentation (it opens in a new tab).
 
+### About
+
+The About box shows the first time the page opens on a device and stays until it is dismissed (**Got it**, Esc, or a tap outside it). Open it again with **Settings → About**. It links to this documentation and the source, and shows the version: the date and time the page was built, taken from the `Last-Modified` time GitHub Pages sends for the deployed page.
+
 ---
 
 ## Refresh and offline behavior
