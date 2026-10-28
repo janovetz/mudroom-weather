@@ -544,7 +544,7 @@ const state = {
   loc: null,                       // {lat, lon, name}
   units: store.get("units", "us"),
   dim: store.get("dim", true),
-  pet: store.get("pet", true),
+  pet: store.get("pet2", true),    // new key so devices saved before the default flipped start on
   wear: migrateWear({ ...WEAR_DEFAULTS, ...store.get("wear", {}) }),
   walks: [1, 2, 3],
   view: VIEWS.includes(store.get("view")) ? store.get("view") : "hourly",
@@ -1516,7 +1516,7 @@ $("units").addEventListener("click", (e) => {
   setLocation(state.loc);   // re-keys the cache and refetches in the new units
 });
 $("dim-toggle").onclick = () => { state.dim = !state.dim; store.set("dim", state.dim); syncSettingsUI(); applyDim(); };
-$("pet-toggle").onclick = () => { state.pet = !state.pet; store.set("pet", state.pet); syncSettingsUI(); if (state.wx) renderWear(); };
+$("pet-toggle").onclick = () => { state.pet = !state.pet; store.set("pet2", state.pet); syncSettingsUI(); if (state.wx) renderWear(); };
 $("open-settings").onclick = () => {
   syncSettingsUI();
   // Shows what the browser actually gives the page, in CSS pixels — handy when sizing for a specific tablet.
