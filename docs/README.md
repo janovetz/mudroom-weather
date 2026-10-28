@@ -52,7 +52,7 @@ For US locations without a `name`, the nearest town is looked up from the Nation
 | Heads-up | Notable changes in the next 18 hours. See [Heads-up line](#heads-up-line). | — |
 | Stats | Wind (with gusts when they exceed the sustained speed by 8+), humidity and dew point, UV and US AQI, pressure, next sunrise or sunset | Hover AQI for the PM2.5 value |
 | NWS forecast | The next two NWS text forecast periods (US only) | — |
-| Radar | Animated radar loop with the home location marked | Tap the map to toggle full screen (Esc exits). + / − zoom around home; ⌂ re-centers. ▶/❚❚ plays or pauses. |
+| Radar | Animated radar loop with the home location marked; each frame shows its age (e.g. "15 min ago") | Tap the map to toggle full screen (Esc exits). + / − zoom around home; ⌂ re-centers. ▶/❚❚ plays or pauses. |
 | Forecast strip | Next 24 hours → 7 days → all available days (up to 16) | Tap to cycle views |
 
 In the forecast strip, the shaded bar behind each column shows the chance of precipitation (from 10%); the percentage is printed from 20%.

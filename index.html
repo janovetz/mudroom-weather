@@ -1352,7 +1352,9 @@ const radar = {
     const f = this.frames[i];
     if (!f) return;
     for (const [url, layer] of this.layers) layer.setOpacity(url === f.url ? 0.75 : 0);
-    $("radar-time").textContent = fTime(f.time / 1000);
+    // age reads faster than a clock time when judging how fresh the scan is
+    const ago = Math.max(0, Math.round((Date.now() - f.time) / 60e3));
+    $("radar-time").textContent = ago ? `${ago} min ago` : "Now";
     $("radar-track").querySelectorAll("i").forEach((el, k) => el.classList.toggle("on", k <= i));
   },
 
