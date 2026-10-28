@@ -261,6 +261,7 @@
   .pill.on { background: var(--accent); color: #04121e; font-weight: 600; box-shadow: none; }
   .settings .done { justify-self: end; padding: 8px 18px; border-radius: 10px; background: var(--accent); color: #04121e; font-weight: 600; }
   .hint { font-size: 0.75rem; color: var(--faint); line-height: 1.4; }
+  .hint a { color: var(--accent); }
 
   .loading { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); background: var(--bg); z-index: 1000; text-align: center; padding: 24px; }
   .loading[hidden] { display: none; }
@@ -409,7 +410,8 @@
       <div class="wear-groups" id="wear-sliders"></div>
     </div>
     <p class="hint" id="screen-info"></p>
-    <p class="hint">Tip: bookmark a fixed location with <code>?lat=…&amp;lon=…&amp;name=Home</code>. Data: Open-Meteo, NWS, Iowa Environmental Mesonet, RainViewer, Esri.</p>
+    <p class="hint">Tip: bookmark a fixed location with <code>?lat=…&amp;lon=…&amp;name=Home</code>. Data: Open-Meteo, NWS, Iowa Environmental Mesonet, RainViewer, Esri.
+      <a href="https://janovetz.github.io/mudroom-weather/docs/" target="_blank" rel="noopener">Documentation</a></p>
     <button class="done" value="done">Done</button>
   </form>
 </dialog>

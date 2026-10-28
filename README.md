@@ -2,11 +2,14 @@
 
 A fast, ad-free, single-page weather display built for an always-on tablet (tuned for 1440×960 landscape, works on phones).
 
-- Current conditions, "heads-up" summary, and NWS text forecast
+- Current conditions, US air quality (AQI), "heads-up" summary, and NWS text forecast
+- What to wear for the next 1–3 hours (headwear, shell, insulation, pants, footwear, hi-viz), with adjustable set points and tap-for-reason tiles
+- Spoken summary of conditions and what to wear, read aloud on tap
+- Pet Mode: a Hot Paws warning when it's hot enough to burn paws on pavement
 - Animated radar (Iowa State NEXRAD composite in the US, RainViewer elsewhere) — tap to go full screen, +/−/home buttons to zoom
 - Forecast strip — tap to cycle 24 hours → 7 days → 16 days
 - NWS watches/warnings for US locations
-- Keeps the screen awake, dims at night, remembers its view, paints instantly from the last forecast
+- Pure-black theme for OLED screens; keeps the screen awake, dims at night, remembers its view, paints instantly from the last forecast
 
 No build step, no API keys: everything is in `index.html`.
 

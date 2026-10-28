@@ -179,7 +179,7 @@ Open with ⚙. Changes apply immediately and are saved in the browser (`localSto
 | Display | **Dim at night**: dims the screen from 1 hour after sunset until 30 minutes before sunrise. Any touch brightens it for 60 seconds. **Pet Mode**: see [Pet Mode](#pet-mode). |
 | What to wear | Set points; see [Set points](#set-points) |
 
-The bottom of the dialog shows the page size in CSS and device pixels, which helps when sizing for a specific tablet.
+The bottom of the dialog shows the page size in CSS and device pixels, which helps when sizing for a specific tablet, and links to this documentation (it opens in a new tab).
 
 ---
 
