@@ -159,7 +159,7 @@ Example:
 
 ## Pet Mode
 
-Turn on in Settings → *Display* → **Pet Mode**. When it's on, a red **Hot Paws Warning - Check pavement temperature!** leads the heads-up line and the spoken summary whenever, during the time out:
+On by default; toggle it in Settings → *Display* → **Pet Mode**. When it's on, a red **Hot Paws Warning - Check pavement temperature!** leads the heads-up line and the spoken summary whenever, during the time out:
 
 - the air temperature reaches the *air* set point (default 77 °F), **or**
 - the model's ground-surface temperature reaches the *ground* set point (default 115 °F).

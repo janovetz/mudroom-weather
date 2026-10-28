@@ -544,7 +544,7 @@ const state = {
   loc: null,                       // {lat, lon, name}
   units: store.get("units", "us"),
   dim: store.get("dim", true),
-  pet: store.get("pet", false),
+  pet: store.get("pet", true),
   wear: migrateWear({ ...WEAR_DEFAULTS, ...store.get("wear", {}) }),
   walks: [1, 2, 3],
   view: VIEWS.includes(store.get("view")) ? store.get("view") : "hourly",
