@@ -10,6 +10,8 @@ A fast, ad-free, single-page weather display built for an always-on tablet (tune
 
 No build step, no API keys: everything is in `index.html`.
 
+**[Full documentation →](docs/README.md)**: layout, what-to-wear rules and set points, Pet Mode, settings, data sources.
+
 ## Location
 
 Nothing is hard-coded. Open the page with your coordinates and it remembers them:
