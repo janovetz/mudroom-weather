@@ -754,7 +754,7 @@ function renderNow(w) {
 //               otherwise Cap for Medium insulation, sun, light drizzle or possible showers; else None
 //   Shell:      Gore-Tex if precipitation is expected, Soft Shell if showers are possible or it's windy, else None
 //   Insulation: by the coldest "feels like" temperature in the window
-//   Pants:      Shell when moderate rain or heavier is expected (rate set point, or a moderate+ forecast code)
+//   Pants:      Gore-Tex shell pants when moderate rain or heavier is expected (rate set point, or a moderate+ forecast code)
 //   Visibility: Hi-Viz when any part of the time out falls in low light: from dimMins before sunset
 //               until dimMins after sunrise
 //   Footwear:   Gore-Tex if it's wet out, there's snow on the ground, or the wet-feet chance reaches its set point:
@@ -818,7 +818,7 @@ function whatToWear(w) {
     : insulation === "Heavy" ? "Insulated"
     : insulation === "Medium" || uv >= S.capUV || wetNow || possible ? "Cap" : "None";
   const shell = wetNow ? "Gore-Tex" : possible || wind >= S.softWind ? "Soft Shell" : "None";
-  const pants = moderate ? "Shell" : "None";
+  const pants = moderate ? "Gore-Tex" : "None";
   const feet = icy ? "Yak Trax" : wetNow || snowGround || wetFeet >= S.feetWet ? "Gore-Tex" : "Light";
 
   // Plain-language reasons for the tap-for-details popups, using the same values and set points as the decisions.
@@ -848,7 +848,7 @@ function whatToWear(w) {
       : `No rain expected (highest chance ${skyPct}%) and wind up to ${WIND(wind)} — under ${WIND(S.softWind)}.`,
     insulation: `Coldest feels-like during ${out}: ${T(coldest)}. Heavy below ${T(S.heavy)}, Medium below ${T(S.medium)}, ` +
       `Light below ${T(S.light)}.`,
-    pants: pants === "Shell"
+    pants: pants === "Gore-Tex"
       ? (peak >= S.pantsRate ? `Rain/snow up to ${RATE(peak)} (shell pants from ${RATE(S.pantsRate)}).`
         : `Forecast calls for ${worst(codes.filter((k) => MODERATE_CODES.includes(k)))} — moderate or heavier.`)
       : `No moderate rain expected${peak > 0 ? ` (up to ${RATE(peak)})` : ""}; shell pants from ${RATE(S.pantsRate)}.`,
@@ -915,7 +915,7 @@ function renderWear() {
 }
 
 // Tap a wear tile for its reasoning. One popup at a time; tap the tile again, elsewhere, or wait 10 s to close.
-const WEAR_NAMES = { head: "Headwear", shell: "Shell", insulation: "Insulation", pants: "Pants", feet: "Footwear", viz: "Hi-Viz" };
+const WEAR_NAMES = { head: "Headwear", shell: "Shell", insulation: "Insulation", pants: "Shell (Pants)", feet: "Footwear", viz: "Hi-Viz" };
 const tip = { layer: null, timer: null };
 function fillTip() {
   const x = state.wearNow, el = $("wear-tip"), layer = tip.layer;
@@ -973,7 +973,7 @@ function wearHTML(x) {
   return tile("head", "Headwear", x.head, x.head === "None" ? "off" : x.head === "Gore-Tex" ? "wet" : "") +
     tile("shell", "Shell", x.shell, x.shell === "None" ? "off" : x.shell === "Gore-Tex" ? "wet" : "") +
     tile("insulation", "Insulation", x.insulation, x.insulation === "None" ? "off" : "") +
-    tile("pants", "Pants", x.pants, x.pants === "None" ? "off" : "wet") +
+    tile("pants", "Shell (Pants)", x.pants, x.pants === "None" ? "off" : "wet") +
     tile("feet", "Footwear", x.feet, x.feet === "Yak Trax" ? "ice" : x.feet === "Gore-Tex" ? "wet" : "") +
     `<div class="w viz ${x.viz ? "on" : ""}" data-layer="viz" role="button" tabindex="0" aria-label="${x.viz ? "Wear hi-viz" : "Hi-viz not needed"}">${vest(!!x.viz)}</div>` +
     `<div class="why">${x.why}</div>`;
