@@ -72,6 +72,9 @@
   .icon-btn { width: 2.3rem; height: 2.3rem; border-radius: 50%; display: grid; place-items: center; color: var(--muted); background: var(--panel); }
   .icon-btn svg { width: 1.15rem; height: 1.15rem; }
   .icon-btn.on { color: #04121e; background: var(--accent); }
+  .icon-btn[hidden] { display: none; }
+  .speak-btn { width: 3.6rem; height: 3.6rem; margin-left: auto; flex: none; background: var(--panel-2); color: var(--accent); }
+  .speak-btn svg { width: 1.8rem; height: 1.8rem; }
 
   /* ---------- alerts ---------- */
   .alerts:empty { display: none; }
@@ -291,9 +294,6 @@
       <div class="time" id="clock-time">--:--</div>
       <div class="date" id="clock-date"></div>
     </div>
-    <button class="icon-btn" id="speak" aria-label="Read the weather aloud" hidden>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>
-    </button>
     <button class="icon-btn" id="open-settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
@@ -306,6 +306,9 @@
       <div class="now-top">
         <div class="now-icon" id="now-icon"></div>
         <div class="now-temp" id="now-temp">--</div>
+        <button class="icon-btn speak-btn" id="speak" aria-label="Read the weather aloud" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+        </button>
       </div>
       <div>
         <div class="now-desc" id="now-desc"></div>
@@ -1045,31 +1048,31 @@ function headsUp(w, hr = fHour) {
 /* ---------- spoken summary: conditions, alerts, heads-up and what to wear, read aloud on tap ---------- */
 function spokenSummary() {
   const w = state.wx, c = w.current, d = w.daily, ti = todayIndex(), x = state.wearNow;
-  const deg = (t) => `${r(t)} degrees`;
   const list = (items) => new Intl.ListFormat("en", { type: "conjunction" }).format(items);
-  const parts = [`It's ${deg(c.temperature_2m)} and ${wxInfo(c.weather_code).label.toLowerCase()}` +
-    (Math.abs(c.apparent_temperature - c.temperature_2m) >= 3 ? `, feeling like ${deg(c.apparent_temperature)}.` : ".") +
-    ` Today's high ${deg(d.temperature_2m_max[ti])}, low ${deg(d.temperature_2m_min[ti])}.`];
+  const parts = [`${r(c.temperature_2m)} ${state.units === "us" ? "Fahrenheit" : "Celsius"} and ${wxInfo(c.weather_code).label.toLowerCase()}` +
+    (Math.abs(c.apparent_temperature - c.temperature_2m) >= 3 ? `, feels like ${r(c.apparent_temperature)}.` : ".") +
+    ` High ${r(d.temperature_2m_max[ti])}, low ${r(d.temperature_2m_min[ti])}.`];
 
   const alerts = [...document.querySelectorAll("#alerts .alert b")].map((b) => b.textContent);
-  if (alerts.length) parts.push(`Active alert${alerts.length > 1 ? "s" : ""}: ${list(alerts)}.`);
+  if (alerts.length) parts.push(`Alert${alerts.length > 1 ? "s" : ""}: ${list(alerts)}.`);
 
-  // Same heads-up as on screen, with spoken hours ("6 PM", not "6p") and units spelled out
+  // Same heads-up as on screen, minus the umbrella note, with spoken hours ("6 PM", not "6p") and units spelled out
   const notes = headsUp(w, (s) => fmt({ hour: "numeric" }).format(s * 1000))
-    .replace(/<[^>]+>/g, "").replace(/°/g, " degrees").replace(/(\d) in\b/g, "$1 inches").replace(/ mph\b/g, " miles per hour");
-  if (notes) parts.push(notes.split(" · ").join(". ") + ".");
+    .replace(/<[^>]+>/g, "").replace(/°/g, "").replace(/(\d) in\b/g, "$1 inches").replace(/ mph\b/g, " miles per hour")
+    .split(" · ").filter((n) => n && !/umbrella/i.test(n));
+  if (notes.length) parts.push(notes.join(". ") + ".");
 
   if (x) {
     const n = state.wear.walk;
     const wear = [
-      { "Gore-Tex": "a Gore-Tex hat", Insulated: "an insulated hat", Cap: "a cap" }[x.head],
-      { "Gore-Tex": "a Gore-Tex shell", "Soft Shell": "a soft shell" }[x.shell],
+      { "Gore-Tex": "Gore-Tex hat", Insulated: "insulated hat", Cap: "cap" }[x.head],
+      { "Gore-Tex": "Gore-Tex shell", "Soft Shell": "soft shell" }[x.shell],
       { Light: "light insulation", Medium: "medium insulation", Heavy: "heavy insulation and gloves" }[x.insulation],
       x.pants === "Gore-Tex" && "shell pants",
       { "Yak Trax": "Yak Trax", "Gore-Tex": "Gore-Tex footwear" }[x.feet],
-      x.viz && "a hi-viz vest",
+      x.viz && "hi-viz",
     ].filter(Boolean);
-    parts.push(`For ${n} hour${n > 1 ? "s" : ""} out, ` + (wear.length ? `wear ${list(wear)}.` : "no extra layers needed."));
+    parts.push(`For ${n} hour${n > 1 ? "s" : ""}: ` + (wear.length ? `${list(wear)}.` : "no extra layers."));
   }
   return parts.join(" ");
 }
