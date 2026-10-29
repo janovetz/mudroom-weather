@@ -100,7 +100,8 @@
   header, .alerts, .forecast { flex: none; }
   .card { background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); padding: 18px 20px; min-height: 0; }
 
-  .now { display: flex; flex-direction: column; gap: 1rem; overflow: hidden; }
+  .now { display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }   /* scroll when a short screen can't fit it all */
+  .now > * { flex: none; }   /* don't let clipped children (e.g. .nws) squash instead of scrolling */
   .now-top { display: flex; align-items: center; gap: 0.6rem; }
   .now-icon { width: 5.6rem; height: 5.6rem; flex: none; }
   .now-icon svg { width: 100%; height: 100%; display: block; }
