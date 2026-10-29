@@ -1552,6 +1552,7 @@ document.addEventListener("pointerdown", () => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   keepAwake();
+  render(); tickClock(); updateStatus();   // timers were frozen in the background (iOS home-screen apps): repaint for "now" right away
   if (Date.now() - state.lastOk > WEATHER_EVERY) refreshAll();
   if (radar.map) radar.load();
 });

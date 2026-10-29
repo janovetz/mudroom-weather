@@ -198,7 +198,7 @@ The About box shows the first time the page opens on a device and stays until it
 | What to wear, heads-up, Hi-Viz, dimming | Every minute |
 | Whole page | Reload every 12 hours |
 
-On load, the page draws immediately from the last saved forecast, then refreshes in the background. The header shows **Updated N min ago**; after 20 minutes without a successful update it turns orange and reads **Offline**. Returning to the page after it's been hidden refreshes anything that's out of date.
+On load, the page draws immediately from the last saved forecast, then refreshes in the background. The header shows **Updated N min ago**; after 20 minutes without a successful update it turns orange and reads **Offline**. Returning to the page after it's been hidden (e.g. reopening the home-screen app, whose timers the OS pauses in the background) immediately redraws everything for the current time from the data on hand, then refreshes anything that's out of date.
 
 ---
 
