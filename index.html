@@ -113,11 +113,13 @@
   .headsup:empty { display: none; }
   .headsup strong { color: var(--accent); font-weight: 600; }
   .headsup strong.paws { color: var(--danger); }
-  .wear { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }   /* upper body / lower body + hi-viz */
-  .wear .w { background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); border-radius: 12px; padding: 8px 10px; min-width: 0; }
-  .wear .w.viz { display: flex; align-items: center; justify-content: center; }
+  .wear { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }   /* upper body / lower body + hi-viz; three tiles a row */
+  .wear .w { grid-column: span 2; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); border-radius: 12px; padding: 8px 10px; min-width: 0; }
+  .wear .w.viz, .wear .w.dog { display: flex; align-items: center; justify-content: center; padding: 8px 4px; }
+  .wear:has(.dog) .w.viz, .wear .w.dog { grid-column: span 1; }   /* hi-viz and dogwear share a cell so the panel doesn't grow */
   .wear .w.viz.on { background: color-mix(in srgb, #d7ff3a 18%, var(--panel-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, #d7ff3a 40%, transparent); }
-  .wear .w.viz svg { width: 2.1rem; height: 2.1rem; display: block; }
+  .wear .w.dog.on { background: color-mix(in srgb, var(--accent) 18%, var(--panel-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
+  .wear .w.viz svg, .wear .w.dog svg { width: 2.1rem; height: 2.1rem; display: block; }
   .wear .k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.62rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
   .wear .v { font-size: 0.98rem; font-weight: 600; margin-top: 2px; line-height: 1.2; }
   .wear .w.off .v { color: var(--faint); font-weight: 400; }
@@ -446,6 +448,7 @@
       <div class="row">
         <button type="button" class="pill" id="dim-toggle">Dim at night</button>
         <button type="button" class="pill" id="pet-toggle">Pet Mode</button>
+        <button type="button" class="pill" id="dog-toggle">Dogwear</button>
       </div>
     </div>
     </div>
@@ -482,6 +485,13 @@ const RADAR_FADE_CURVE = 2;       // above 1 keeps the weakest returns faint whi
 const N0Q_WEAK_COLORS = "85718f85728f86738d87758b87768b887789897987897a878a7b858b7d848b7e848c7f828d81808d82808e837e8f847c8f857c90877b918879918979928b77938d759691539894579b975b9d9a60a09d64a3a068a5a36da8a671aaa976adac7ab0af7eb2b283b7b88cbabb90bdbe94bfc199c2c49dc4c7a2c7caa6cacdaaccd0afd2d4b4cfd2b4c9ccb4c6c9b4c3c7b4c0c4b4bdc1b4b9beb4b6bbb4b3b9b4b0b6b4adb3b4aab0b4a4abb4a0a8b49da5b49aa2b497a0b4949db4919ab4949bb59098b48c95b38892b2808cb07c89af7886ae7483ac7080ab6c7daa6779a96376a85f73a75b70a6576da44f67a24b64a14761a0435e9f415b9e4361a24568a6486faa4a76ae4d7db24f84b6518bbb5699c3599fc75ba6cb5eadcf60b4d462bbd865c2dc67c9e06ad0e46fd6e868d6d759d6b352d6a24bd69043d67e3cd66d35d65b11d51811d11710cd1710c81610c4160fbc15";
 const VIEWS = ["hourly", "week", "max"];
 
+// Named precipitation levels, weakest first. precipLevel() maps a weather code to one (0 = dry).
+const PRECIP_LEVELS = ["None", "Drizzle", "Light rain/snow", "Moderate rain/snow", "Heavy rain/snow"];
+const precipLevel = (k) => [65, 67, 75, 82, 86, 95, 96, 99].includes(k) ? 4   // storms count as heavy
+  : [63, 73, 81].includes(k) ? 3
+  : [61, 66, 71, 77, 80, 85].includes(k) ? 2
+  : k >= 51 ? 1 : 0;
+
 // What-to-wear set points, always stored in °F / inches / mph and converted for display.
 const WEAR_DEFAULTS = {
   hatRate: 0.02,     // Gore-Tex hat when expected precipitation ≥ this (in/hr)
@@ -500,6 +510,8 @@ const WEAR_DEFAULTS = {
   dimMins: 15,       // Hi-Viz from this many minutes before sunset until this many after sunrise
   pawsAir: 77,       // Pet Mode: Hot Paws warning when the air reaches this (°F)…
   pawsGround: 115,   // …or the ground surface reaches this (°F)
+  dogTemp: 32,       // Dogwear when the air is below this (°F)…
+  dogPrecip: 2,      // …or expected precipitation reaches this level (index into PRECIP_LEVELS)
   walk: 1,           // time outside, starting now (1, 2 or 3 hrs) — picked on the main panel
 };
 const WEAR_SLIDERS = [
@@ -531,6 +543,10 @@ const WEAR_SLIDERS = [
     ["pawsAir", "Warn when air temperature ≥", 65, 95, 1, "temp"],
     ["pawsGround", "…or ground surface ≥", 90, 140, 1, "temp"],
   ]],
+  ["Dogwear", [
+    ["dogTemp", "When air temperature below", -10, 60, 1, "temp"],
+    ["dogPrecip", "…or precipitation reaches", 1, 4, 1, "precip"],
+  ]],
   ["Forecast", [
     ["likely", "Count rain/snow as expected at chance ≥", 10, 90, 5, "pct"],
   ]],
@@ -553,6 +569,7 @@ const state = {
   units: store.get("units", "us"),
   dim: store.get("dim", true),
   pet: store.get("pet2", true),    // new key so devices saved before the default flipped start on
+  dog: store.get("dogwear", false),
   wear: migrateWear({ ...WEAR_DEFAULTS, ...store.get("wear", {}) }),
   walks: [1, 2, 3],
   view: VIEWS.includes(store.get("view")) ? store.get("view") : "hourly",
@@ -838,6 +855,7 @@ function renderNow(w) {
 //               relative to a soaking 0.10 in, and sky = the highest hourly rain chance during the time out.
 //               Yak Trax outrank both: freezing rain/drizzle, or a ground surface at/below iceTemp with snow on
 //               the ground, snow expected, or ground still wet (ground ≥ 25%)
+//   Dogwear:    when turned on: the air (not feels-like) drops below dogTemp, or expected precipitation reaches dogPrecip
 function whatToWear(w) {
   const h = w.hourly, c = w.current, us = state.units === "us", S = state.wear;
   // normalize to °F / inches / mph
@@ -896,6 +914,9 @@ function whatToWear(w) {
   const shell = wetNow ? "Gore-Tex" : possible || wind >= S.softWind ? "Soft Shell" : "None";
   const pants = moderate ? "Gore-Tex" : "None";
   const feet = icy ? "Yak Trax" : wetNow || snowGround || wetFeet >= S.feetWet ? "Gore-Tex" : "Light";
+  const airLow = Math.min(F(c.temperature_2m), ...hours.map((i) => F(h.temperature_2m[i])));
+  const dogCold = airLow < S.dogTemp, dogWetCode = codes.reduce((a, k) => (precipLevel(k) > precipLevel(a) ? k : a), 0);
+  const dogWet = precipLevel(dogWetCode) >= S.dogPrecip;
 
   // Plain-language reasons for the tap-for-details popups, using the same values and set points as the decisions.
   const T = (f) => fmtWear(f, "temp"), RATE = (x) => fmtWear(x, "rate"), WIND = (x) => fmtWear(x, "wind");
@@ -940,11 +961,18 @@ function whatToWear(w) {
       ? (darkNow ? `Low light now (Hi-Viz from ${S.dimMins} min before sunset until ${S.dimMins} min after sunrise).`
         : `Low light from ${fTime(nextSunset - dim)}, ${S.dimMins} min before the ${fTime(nextSunset)} sunset — during ${out}.`)
       : `Daylight for all of ${out}; low light starts at ${fTime(nextSunset - dim)}.`,
+    dog: dogCold || dogWet
+      ? cap(join([
+          dogCold && `air down to ${T(airLow)} during ${out} (dogwear below ${T(S.dogTemp)})`,
+          dogWet && `${wxInfo(dogWetCode).label.toLowerCase()} expected (dogwear from ${PRECIP_LEVELS[S.dogPrecip].toLowerCase()})`,
+        ])) + "."
+      : `Air stays at ${T(airLow)} or warmer (dogwear below ${T(S.dogTemp)}), and nothing expected reaches ${PRECIP_LEVELS[S.dogPrecip].toLowerCase()}.`,
   };
 
   return {
     head, shell, insulation, pants, feet,
     viz: dark ? "Hi-Viz" : null,
+    dog: state.dog && (dogCold || dogWet),
     reasons,
     why: [
       `Feels ${r(fMin)}°${r(fMax) !== r(fMin) ? "–" + r(fMax) + "°" : ""}`,
@@ -972,6 +1000,7 @@ function fmtWear(v, kind) {
     case "uv": return `${v}`;
     case "mins": return `${v} min`;
     case "hours": return v < 1 ? `${r(v * 60)} min` : `${v} hr${v > 1 ? "s" : ""}`;
+    case "precip": return PRECIP_LEVELS[v];
   }
 }
 
@@ -979,6 +1008,14 @@ function fmtWear(v, kind) {
 const vest = (on) => '<svg viewBox="0 0 24 24" aria-hidden="true">' +
   `<path d="M8.6 2.5 5 4.2 3.8 8.2 4.4 21.5H11V10.5L8.6 2.5zM15.4 2.5 19 4.2 20.2 8.2 19.6 21.5H13V10.5L15.4 2.5z" fill="${on ? "#d7ff3a" : "#3a4756"}"/>` +
   `<path d="M4.2 14.2H11M13 14.2h6.8M4.3 17.6H11M13 17.6h6.6" stroke="${on ? "#e8eef4" : "#566475"}" stroke-width="1.5"/>` +
+  (on ? "" : '<path d="M3 3 21 21M21 3 3 21" stroke="#8a9aab" stroke-width="1.8" stroke-linecap="round"/>') + "</svg>";
+
+// Dog in a coat for the dogwear tile: same bright / crossed-out treatment as the vest
+const dogCoat = (on) => '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  `<g fill="none" stroke="${on ? "#e8eef4" : "#566475"}" stroke-width="1.8" stroke-linecap="round">` +
+  '<path d="M6.5 15v5.5M9.5 15v5.5M14.5 15v5.5M17 15v5.5M4.5 11.5Q2.5 10 3 7.5"/></g>' +
+  `<path d="M18 5.2a3 3 0 0 1 3 2.2l1.6.7a.8.8 0 0 1 .1 1.4L21 10.6a3 3 0 0 1-5.8-1.1V8l-1-2.2a.4.4 0 0 1 .5-.5z" fill="${on ? "#e8eef4" : "#566475"}"/>` +
+  `<rect x="4" y="10.5" width="14.5" height="6.5" rx="3" fill="${on ? "var(--accent)" : "#3a4756"}"/>` +
   (on ? "" : '<path d="M3 3 21 21M21 3 3 21" stroke="#8a9aab" stroke-width="1.8" stroke-linecap="round"/>') + "</svg>";
 
 function renderWear() {
@@ -992,13 +1029,13 @@ function renderWear() {
 }
 
 // Tap a wear tile for its reasoning. One popup at a time; tap the tile again, elsewhere, or wait 10 s to close.
-const WEAR_NAMES = { head: "Headwear", shell: "Shell", insulation: "Insulation", pants: "Shell (Pants)", feet: "Footwear", viz: "Hi-Viz" };
+const WEAR_NAMES = { head: "Headwear", shell: "Shell", insulation: "Insulation", pants: "Shell (Pants)", feet: "Footwear", viz: "Hi-Viz", dog: "Dogwear" };
 const tip = { layer: null, timer: null };
 function fillTip() {
   const x = state.wearNow, el = $("wear-tip"), layer = tip.layer;
   const tile = $("wear").querySelector(`[data-layer="${layer}"]`);
   if (!x || !tile) return hideTip();
-  const value = layer === "viz" ? (x.viz ? "wear it" : "not needed") : x[layer];
+  const value = layer === "viz" || layer === "dog" ? (x[layer] ? "wear it" : "not needed") : x[layer];
   el.innerHTML = `<b>${WEAR_NAMES[layer]}: ${value}</b>${x.reasons[layer]}`;
   $("wear").querySelectorAll(".sel").forEach((t) => t.classList.remove("sel"));
   tile.classList.add("sel");
@@ -1053,6 +1090,7 @@ function wearHTML(x) {
     tile("pants", "Shell (Pants)", x.pants, x.pants === "None" ? "off" : "wet") +
     tile("feet", "Footwear", x.feet, x.feet === "Yak Trax" ? "ice" : x.feet === "Gore-Tex" ? "wet" : "") +
     `<div class="w viz ${x.viz ? "on" : ""}" data-layer="viz" role="button" tabindex="0" aria-label="${x.viz ? "Wear hi-viz" : "Hi-viz not needed"}">${vest(!!x.viz)}</div>` +
+    (state.dog ? `<div class="w dog ${x.dog ? "on" : ""}" data-layer="dog" role="button" tabindex="0" aria-label="${x.dog ? "Dogwear needed" : "Dogwear not needed"}">${dogCoat(x.dog)}</div>` : "") +
     `<div class="why">${x.why}</div>`;
 }
 
@@ -1154,6 +1192,7 @@ function spokenSummary() {
       x.pants === "Gore-Tex" && "shell pants",
       { "Yak Trax": "Yak Trax", "Gore-Tex": "Gore-Tex footwear" }[x.feet],
       x.viz && "hi-viz",
+      x.dog && "dogwear",
     ].filter(Boolean);
     parts.push(`For ${n} hour${n > 1 ? "s" : ""}: ` + (wear.length ? `${list(wear)}.` : "no extra layers."));
   }
@@ -1483,6 +1522,7 @@ function syncSettingsUI() {
   document.querySelectorAll("#units .pill").forEach((b) => b.classList.toggle("on", b.dataset.u === state.units));
   $("dim-toggle").classList.toggle("on", state.dim);
   $("pet-toggle").classList.toggle("on", state.pet);
+  $("dog-toggle").classList.toggle("on", state.dog);
   syncWearSliders();
 }
 
@@ -1577,6 +1617,7 @@ $("units").addEventListener("click", (e) => {
 });
 $("dim-toggle").onclick = () => { state.dim = !state.dim; store.set("dim", state.dim); syncSettingsUI(); applyDim(); };
 $("pet-toggle").onclick = () => { state.pet = !state.pet; store.set("pet2", state.pet); syncSettingsUI(); if (state.wx) renderWear(); };
+$("dog-toggle").onclick = () => { state.dog = !state.dog; store.set("dogwear", state.dog); syncSettingsUI(); if (state.wx) renderWear(); };
 $("open-settings").onclick = () => {
   syncSettingsUI();
   // Shows what the browser actually gives the page, in CSS pixels — handy when sizing for a specific tablet.

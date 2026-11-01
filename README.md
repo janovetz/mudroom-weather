@@ -6,6 +6,7 @@ A fast, ad-free, single-page weather display built for an always-on tablet (tune
 - What to wear for the next 1–3 hours (headwear, shell, insulation, pants, footwear, hi-viz), with adjustable set points and tap-for-reason tiles
 - Spoken summary of conditions and what to wear, read aloud on tap
 - Pet Mode: a Hot Paws warning when it's hot enough to burn paws on pavement
+- Dogwear: an optional tile showing when the dog should wear gear, by temperature or precipitation
 - Animated radar (Iowa State NEXRAD composite in the US, RainViewer elsewhere) — tap to go full screen, +/−/home buttons to zoom
 - Forecast strip — tap to cycle 24 hours → 7 days → 16 days
 - NWS watches/warnings for US locations

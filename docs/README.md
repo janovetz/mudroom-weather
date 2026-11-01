@@ -8,6 +8,7 @@ Mudroom Weather is a single-page weather display for an always-on tablet. It als
 - [Heads-up line](#heads-up-line)
 - [Spoken summary](#spoken-summary)
 - [Pet Mode](#pet-mode)
+- [Dogwear](#dogwear)
 - [Settings](#settings)
 - [Refresh and offline behavior](#refresh-and-offline-behavior)
 - [Data sources](#data-sources)
@@ -48,7 +49,7 @@ For US locations without a `name`, the nearest town is looked up from the Nation
 | Header | Place name, update status, clock and date | ⚙ opens Settings |
 | Alerts | Active NWS watches, warnings and advisories (US only). Warnings and Severe/Extreme alerts are red; others are orange. | Tap to expand the full text |
 | Conditions | Icon, temperature, sky, feels-like, today's high and low | 🔊 reads the [spoken summary](#spoken-summary) |
-| What to wear | Six tiles plus a one-line reason. See [What to wear](#what-to-wear). | Tap a tile for its reasoning. **Out for N hr** sets the time out. |
+| What to wear | Six tiles (seven with [Dogwear](#dogwear) on) plus a one-line reason. See [What to wear](#what-to-wear). | Tap a tile for its reasoning. **Out for N hr** sets the time out. |
 | Heads-up | Notable changes in the next 18 hours. See [Heads-up line](#heads-up-line). | — |
 | Stats | Wind (with gusts when they exceed the sustained speed by 8+), humidity and dew point, UV and US AQI, pressure, next sunrise or sunset | Hover AQI for the PM2.5 value |
 | NWS forecast | The next two NWS text forecast periods (US only) | — |
@@ -109,6 +110,7 @@ Rules are evaluated top to bottom; the first match wins.
 | | Gore-Tex | The shell is Gore-Tex, there is snow on the ground, or wet-feet chance ≥ *Gore-Tex footwear* set point |
 | | Light | Otherwise |
 | **Hi-Viz** | On | The start or end of the time out falls in low light: from *Hi-Viz* minutes before sunset until the same number of minutes after sunrise |
+| **Dogwear** | On | [Dogwear](#dogwear) is turned on, and the air is below the temperature set point or expected precipitation reaches the precipitation set point |
 
 ### Set points
 
@@ -129,6 +131,8 @@ Adjust these in Settings → *What to wear*. They are stored in °F, inches and 
 | Visibility | Hi-Viz from before sunset / after sunrise | 15 min | 0–60 |
 | Pet Mode | Warn when air temperature ≥ | 77 °F | 65–95 °F |
 | | …or ground surface ≥ | 115 °F | 90–140 °F |
+| Dogwear | When air temperature below | 32 °F | −10–60 °F |
+| | …or precipitation reaches | Light rain/snow | Drizzle, Light, Moderate or Heavy rain/snow |
 | Forecast | Count rain/snow as expected at chance ≥ | 40% | 10–90% |
 
 ---
@@ -180,6 +184,26 @@ Pavement in direct sun can be much hotter than either value; the warning is a pr
 
 ---
 
+## Dogwear
+
+Off by default; toggle it in Settings → *Display* → **Dogwear**. When it's on, a dog icon tile shares the Hi-Viz cell in the what-to-wear panel. The dog is bright when gear is suggested and crossed out when it isn't; tap it for the reason. Suggested dogwear is also read in the spoken summary.
+
+Dogwear is suggested when, during the time out:
+
+- the air temperature (not feels-like) drops below the temperature set point (default 32 °F), **or**
+- the current conditions or an [expected](#terms) hour reach the precipitation set point (default light rain/snow).
+
+Precipitation levels come from the forecast's weather code:
+
+| Level | Weather |
+|---|---|
+| Drizzle | Any drizzle, including freezing drizzle |
+| Light rain/snow | Light rain, light freezing rain, light snow, snow grains, light rain or snow showers |
+| Moderate rain/snow | Rain, snow, moderate showers |
+| Heavy rain/snow | Heavy rain, snow or showers, heavy freezing rain, thunderstorms |
+
+---
+
 ## Settings
 
 Open with ⚙. Changes apply immediately and are saved in the browser (`localStorage`, keys prefixed `wx.`), so each device keeps its own settings.
@@ -188,7 +212,7 @@ Open with ⚙. Changes apply immediately and are saved in the browser (`localSto
 |---|---|
 | Location | Search by city or ZIP, or **Use my location** |
 | Units | °F · mph · in, or °C · km/h · mm |
-| Display | **Dim at night**: dims the screen from 1 hour after sunset until 30 minutes before sunrise. Any touch brightens it for 60 seconds. **Pet Mode**: see [Pet Mode](#pet-mode). |
+| Display | **Dim at night**: dims the screen from 1 hour after sunset until 30 minutes before sunrise. Any touch brightens it for 60 seconds. **Pet Mode**: see [Pet Mode](#pet-mode). **Dogwear**: see [Dogwear](#dogwear). |
 | What to wear | Set points; see [Set points](#set-points) |
 
 The bottom of the dialog shows the page size in CSS and device pixels, which helps when sizing for a specific tablet, and links to this documentation (it opens in a new tab).
