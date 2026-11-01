@@ -59,6 +59,18 @@ In the forecast strip, the shaded bar behind each column shows the chance of pre
 
 AQI uses the EPA categories: Good (0–50), Moderate (51–100), Sensitive (101–150), Unhealthy (151–200), Very unhealthy (201–300), Hazardous (301+).
 
+### Radar fading
+
+The US composite can include large areas of weak, scattered returns, often with sharp blocky edges from the clutter check Iowa Environmental Mesonet applies when building it. At full strength these look as significant as real precipitation, so the app fades weak returns in the browser. Each tile's colors are converted back to dBZ to set the pixel's opacity:
+
+| Return | Pixel opacity | Constant |
+|---|---|---|
+| 25 dBZ and up | Full | `RADAR_FULL_DBZ` |
+| 0 to 25 dBZ | Rises along a curve from 10% to full (about 29% at 10 dBZ, 69% at 20 dBZ) | `RADAR_FADE_CURVE` |
+| 0 dBZ and below | 10% | `RADAR_FADE_DBZ`, `RADAR_MIN_ALPHA` |
+
+This is on top of the 75% opacity of the whole radar layer. Fading is always on and applies only to the US composite; RainViewer frames are shown as delivered.
+
 ---
 
 ## What to wear
@@ -211,7 +223,7 @@ All sources are free and need no API key.
 | Forecast, current conditions, ground surface temperature | [Open-Meteo Forecast API](https://open-meteo.com/) |
 | Air quality (US AQI, PM2.5) | [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api) |
 | Alerts, text forecast, town names (US) | [National Weather Service API](https://www.weather.gov/documentation/services-web-api) |
-| Radar, contiguous US | [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu/) NEXRAD composite: 11 frames, 5 minutes apart |
+| Radar, contiguous US | [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu/) NEXRAD composite: 11 frames, 5 minutes apart, [weak returns faded](#radar-fading) |
 | Radar, elsewhere | [RainViewer](https://www.rainviewer.com/api.html) |
 | Location search | [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api) |
 | Basemap | [Esri](https://www.esri.com/) Dark Gray Canvas |

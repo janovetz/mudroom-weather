@@ -473,6 +473,13 @@ const WEATHER_EVERY = 10 * 60e3;
 const ALERTS_EVERY  = 5 * 60e3;
 const RADAR_EVERY   = 5 * 60e3;
 const RADAR_FRAMES  = 11;         // 50 minutes of 5-minute scans
+// Weak radar returns fade out so they don't look as significant as real precipitation, without hiding them.
+const RADAR_FULL_DBZ  = 25;       // this strong and up draws at full strength
+const RADAR_FADE_DBZ  = 0;        // this weak and below draws at RADAR_MIN_ALPHA
+const RADAR_MIN_ALPHA = 0.1;
+const RADAR_FADE_CURVE = 2;       // above 1 keeps the weakest returns faint while light rain stays easy to see
+// IEM N0Q tile colors as RGB hex, 0.5 dBZ apart from -31.5 up to just under RADAR_FULL_DBZ. Any other color draws at full strength, so a palette change can't hide rain.
+const N0Q_WEAK_COLORS = "85718f85728f86738d87758b87768b887789897987897a878a7b858b7d848b7e848c7f828d81808d82808e837e8f847c8f857c90877b918879918979928b77938d759691539894579b975b9d9a60a09d64a3a068a5a36da8a671aaa976adac7ab0af7eb2b283b7b88cbabb90bdbe94bfc199c2c49dc4c7a2c7caa6cacdaaccd0afd2d4b4cfd2b4c9ccb4c6c9b4c3c7b4c0c4b4bdc1b4b9beb4b6bbb4b3b9b4b0b6b4adb3b4aab0b4a4abb4a0a8b49da5b49aa2b497a0b4949db4919ab4949bb59098b48c95b38892b2808cb07c89af7886ae7483ac7080ab6c7daa6779a96376a85f73a75b70a6576da44f67a24b64a14761a0435e9f415b9e4361a24568a6486faa4a76ae4d7db24f84b6518bbb5699c3599fc75ba6cb5eadcf60b4d462bbd865c2dc67c9e06ad0e46fd6e868d6d759d6b352d6a24bd69043d67e3cd66d35d65b11d51811d11710cd1710c81610c4160fbc15";
 const VIEWS = ["hourly", "week", "max"];
 
 // What-to-wear set points, always stored in °F / inches / mph and converted for display.
@@ -1223,6 +1230,53 @@ function daysHTML(n) {
 }
 
 /* ================= radar ================= */
+const radarAlpha = (dbz) => {
+  const t = Math.min(1, Math.max(0, (dbz - RADAR_FADE_DBZ) / (RADAR_FULL_DBZ - RADAR_FADE_DBZ)));
+  return Math.round(255 * (RADAR_MIN_ALPHA + (1 - RADAR_MIN_ALPHA) * t ** RADAR_FADE_CURVE));
+};
+// Colors match within ±1 per channel: browser privacy features can add slight noise to canvas reads, which would otherwise look like strong returns.
+const n0qAlpha = new Map();
+N0Q_WEAK_COLORS.match(/.{6}/g).forEach((hex, i) => {
+  const color = parseInt(hex, 16), alpha = radarAlpha(-31.5 + i / 2);
+  for (const r of [-1, 0, 1]) for (const g of [-1, 0, 1]) for (const b of [-1, 0, 1]) n0qAlpha.set(color + r * 65536 + g * 256 + b, alpha);
+});
+
+function fadeWeakRadar(px) {
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3]) px[i + 3] = n0qAlpha.get((px[i] << 16) | (px[i + 1] << 8) | px[i + 2]) ?? 255;
+  }
+}
+
+// A tile layer that fades weak returns on a canvas. If IEM ever stops allowing pixel access, tiles show unfaded instead of disappearing.
+function fadedRadarLayer(url, options) {
+  const layer = L.gridLayer(options);
+  layer.createTile = (coords, done) => {
+    const canvas = document.createElement("canvas"), size = layer.getTileSize();
+    canvas.width = size.x;
+    canvas.height = size.y;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const src = L.Util.template(url, coords);
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, size.x, size.y);
+      const data = ctx.getImageData(0, 0, size.x, size.y);
+      fadeWeakRadar(data.data);
+      ctx.putImageData(data, 0, 0);
+      done(null, canvas);
+    };
+    img.onerror = () => {
+      const plain = new Image();
+      plain.onload = () => { ctx.drawImage(plain, 0, 0, size.x, size.y); done(null, canvas); };
+      plain.onerror = () => done(new Error(`radar tile failed: ${src}`), canvas);
+      plain.src = src;
+    };
+    img.src = src;
+    return canvas;
+  };
+  return layer;
+}
+
 const radar = {
   map: null, frames: [], layers: new Map(), pos: 0, playing: true, timer: null, home: null, refresh: null,
 
@@ -1291,8 +1345,10 @@ const radar = {
   },
 
   addLayer(f) {
-    if (!this.layers.has(f.url))
-      this.layers.set(f.url, L.tileLayer(f.url, { opacity: 0, maxNativeZoom: f.maxZoom, maxZoom: 10, zIndex: 10, attribution: f.attribution }).addTo(this.map));
+    if (!this.layers.has(f.url)) {
+      const options = { opacity: 0, maxNativeZoom: f.maxZoom, maxZoom: 10, zIndex: 10, attribution: f.attribution };
+      this.layers.set(f.url, (f.faded ? fadedRadarLayer(f.url, options) : L.tileLayer(f.url, options)).addTo(this.map));
+    }
     return this.layers.get(f.url);
   },
 
@@ -1335,6 +1391,7 @@ const radar = {
       time: t,
       url: `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::USCOMP-N0Q-${stamp(t)}/{z}/{x}/{y}.png`,
       maxZoom: 10,
+      faded: true,
       attribution: 'Radar &copy; <a href="https://mesonet.agron.iastate.edu/">IEM</a>',
     }));
   },
