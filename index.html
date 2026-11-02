@@ -184,7 +184,9 @@
   .home-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 3px solid #fff; box-shadow: 0 0 0 4px rgba(108,196,255,.35); }
 
   /* tap radar → full page */
-  body.radar-full .radar { position: fixed; inset: 0; z-index: 800; border-radius: 0; border: 0; }
+  body.radar-full .radar { position: fixed; inset: 0; height: auto; min-height: 0; z-index: 800; border-radius: 0; border: 0; }   /* height: auto undoes the stacked layout's 55vh */
+  body.radar-full .radar-zoom { top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); }
+  body.radar-full .radar-bar { bottom: max(12px, env(safe-area-inset-bottom)); left: max(12px, env(safe-area-inset-left)); }
   body.radar-full .radar-title { padding: 8px 14px; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); }
   body.radar-full .radar-title .label { display: none; }
   body.radar-full .radar-title .full { display: block; }
