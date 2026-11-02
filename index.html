@@ -1316,8 +1316,18 @@ function fadedRadarLayer(url, options) {
   return layer;
 }
 
+// Same condition as the stacked, scrolling layout in the CSS, but only for touch: a mouse wheel never gets trapped.
+const STACKED_TOUCH = matchMedia("(pointer: coarse) and (max-aspect-ratio: 1/1), (pointer: coarse) and (max-width: 760px)");
+
 const radar = {
   map: null, frames: [], layers: new Map(), pos: 0, playing: true, timer: null, home: null, refresh: null,
+
+  // A swipe over the inline map must scroll the page, so panning waits for full screen. Pinch still zooms.
+  syncDrag() {
+    if (!this.map) return;
+    const scrolls = STACKED_TOUCH.matches && !document.body.classList.contains("radar-full");
+    this.map.dragging[scrolls ? "disable" : "enable"]();
+  },
 
   init() {
     // Restore wherever the map was last left (for this location); otherwise start centered on home.
@@ -1346,6 +1356,8 @@ const radar = {
 
     // A tap (not a drag or pinch) toggles full-page radar.
     this.map.on("click", () => setRadarFull(!document.body.classList.contains("radar-full")));
+    STACKED_TOUCH.addEventListener("change", () => this.syncDrag());   // rotating can change the layout
+    this.syncDrag();
     $("radar-play").onclick = () => { this.playing = !this.playing; this.drawControls(); if (this.playing) this.tick(); };
     // One-tap zoom so pinching is never required. Zooming keeps home in view when it's on screen.
     const zoomBy = (dz) => {
@@ -1479,6 +1491,7 @@ const homeKey = () => `${state.loc.lat},${state.loc.lon}`;
 function setRadarFull(on) {
   document.body.classList.toggle("radar-full", on);
   store.set("radarFull", on);
+  radar.syncDrag();
 }
 
 /* ================= clock, status, dimming ================= */
