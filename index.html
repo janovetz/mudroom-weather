@@ -167,7 +167,7 @@
   .leaflet-control-attribution { background: rgba(0,0,0,.65) !important; color: var(--faint) !important; font-size: 9px !important; }
   .leaflet-control-attribution a { color: var(--muted) !important; }
   .overlay { position: absolute; z-index: 500; background: rgba(0,0,0,.72); border: 1px solid var(--edge); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-radius: 12px; }
-  .radar-bar { left: 12px; bottom: 12px; display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; width: min(420px, calc(100% - 24px)); }
+  .radar-bar { left: 12px; bottom: max(12px, calc(var(--attr-h, 0px) + 4px)); display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; width: min(420px, calc(100% - 24px)); }
   .radar-bar .icon-btn { width: 2rem; height: 2rem; background: transparent; color: var(--text); }
   .radar-time { font-size: 0.85rem; min-width: 4.8em; }
   .radar-track { flex: 1; display: flex; gap: 3px; height: 5px; }
@@ -186,7 +186,7 @@
   /* tap radar → full page */
   body.radar-full .radar { position: fixed; inset: 0; height: auto; min-height: 0; z-index: 800; border-radius: 0; border: 0; }   /* height: auto undoes the stacked layout's 55vh */
   body.radar-full .radar-zoom { top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); }
-  body.radar-full .radar-bar { bottom: max(12px, env(safe-area-inset-bottom)); left: max(12px, env(safe-area-inset-left)); }
+  body.radar-full .radar-bar { bottom: max(12px, calc(var(--attr-h, 0px) + 4px), env(safe-area-inset-bottom)); left: max(12px, env(safe-area-inset-left)); }
   body.radar-full .radar-title { padding: 8px 14px; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); }
   body.radar-full .radar-title .label { display: none; }
   body.radar-full .radar-title .full { display: block; }
@@ -1377,6 +1377,15 @@ const radar = {
     this.map.on("zoomend", syncZoom);
     syncZoom();
     new ResizeObserver(() => this.map.invalidateSize()).observe($("map"));
+    // The credits must stay visible and can wrap on narrow screens, so lift the radar bar clear when they collide.
+    const attr = this.map.attributionControl.getContainer(), bar = document.querySelector(".radar-bar");
+    const clearAttr = () => {
+      const hits = attr.getBoundingClientRect().left < bar.getBoundingClientRect().right;
+      bar.style.setProperty("--attr-h", hits ? `${attr.offsetHeight}px` : "0px");
+    };
+    const attrWatch = new ResizeObserver(clearAttr);   // the credits also change when the radar source loads
+    attrWatch.observe($("map"));
+    attrWatch.observe(attr);
     this.load();
     this.refresh = setInterval(() => this.load(), RADAR_EVERY);
   },
