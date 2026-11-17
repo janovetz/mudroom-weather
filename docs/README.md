@@ -36,6 +36,7 @@ For US locations without a `name`, the nearest town is looked up from the Nation
 ### Tablet (kiosk) use
 
 - Open the page from a bookmark or home-screen icon. It runs full screen when added to the home screen.
+- **Android:** open your bookmarked `?lat=…&lon=…` link once in Chrome (this saves the location), then choose ⋮ → **Install app** (or **Add to home screen** → **Install**). The installed app opens full screen with no address, status or navigation bars (`display: fullscreen` in `manifest.webmanifest`); swipe in from an edge to show the system bars briefly. It starts at the site root and uses the saved location. For a dedicated wall tablet, a kiosk browser such as Fully Kiosk Browser can also restart the page after a reboot or power loss.
 - The screen is kept awake with the Screen Wake Lock API (HTTPS only).
 - The page reloads itself every 12 hours.
 - The layout is tuned for 1440×960 landscape. Portrait screens and phones get a stacked, scrolling layout.
@@ -308,3 +309,5 @@ The site is published by GitHub Pages from the `main` branch; every push to `mai
 | `spokenSummary()` | Text for the spoken summary |
 | `radar` | Map, radar frames and animation |
 | `cacheKey()` | Version of the saved forecast; bump it when the requested API fields change |
+
+`manifest.webmanifest` makes the page installable on Android; its icons (`icon-192.png`, `icon-512.png`) are rendered from `assets/icon-app.svg`, a full-bleed version of `favicon.svg` with the artwork inside the area Android launchers may crop to a circle.

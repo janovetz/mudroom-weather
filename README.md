@@ -11,6 +11,7 @@ A fast, ad-free, single-page weather display built for an always-on tablet (tune
 - Animated radar (Iowa State NEXRAD composite in the US, RainViewer elsewhere) — tap to go full screen, +/−/home buttons to zoom
 - Forecast strip — tap to cycle 24 hours → 7 days → 16 days
 - NWS watches/warnings for US locations
+- Installs as a full-screen app on Android (Chrome → Install app) and as a home-screen app on iPhone/iPad
 - Pure-black theme for OLED screens; keeps the screen awake, dims at night, remembers its view, paints instantly from the last forecast
 
 No build step, no API keys: everything is in `index.html`.
