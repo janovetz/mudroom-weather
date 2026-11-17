@@ -77,8 +77,7 @@
   .icon-btn svg { width: 1.15rem; height: 1.15rem; }
   .icon-btn.on { color: #04121e; background: var(--accent); box-shadow: none; }
   .icon-btn[hidden] { display: none; }
-  .speak-btn { width: 3.6rem; height: 3.6rem; margin-left: auto; flex: none; background: var(--panel-2); color: var(--accent); }
-  .speak-btn svg { width: 1.8rem; height: 1.8rem; }
+  .speak-btn { color: var(--accent); }
 
   /* ---------- alerts ---------- */
   .alerts:empty { display: none; }
@@ -102,8 +101,9 @@
 
   .now { display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }   /* scroll when a short screen can't fit it all */
   .now > * { flex: none; }   /* don't let clipped children (e.g. .nws) squash instead of scrolling */
+  .now-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem 0.8rem; align-items: center; }   /* conditions on the left, walk dial spanning both rows on the right */
   .now-top { display: flex; align-items: center; gap: 0.6rem; }
-  .now-icon { width: 5.6rem; height: 5.6rem; flex: none; }
+  .now-icon { width: 5.6rem; height: 5.6rem; flex: 0 1 auto; min-width: 2.8rem; }   /* the icon gives way first when a 3-digit temperature needs the room */
   .now-icon svg { width: 100%; height: 100%; display: block; }
   .now-temp { font-size: 5.6rem; font-weight: 200; line-height: 0.9; letter-spacing: -0.04em; }
   .now-temp sup { font-size: 0.38em; font-weight: 300; vertical-align: 1em; margin-left: 2px; color: var(--muted); }
@@ -113,6 +113,37 @@
   .headsup:empty { display: none; }
   .headsup strong { color: var(--accent); font-weight: 600; }
   .headsup strong.paws { color: var(--danger); }
+  /* walk dial: a watch face whose rim runs red → green over the next 12 hours, starting at the hour hand */
+  .walk-face { grid-column: 2; grid-row: 1 / span 2; width: 6.6rem; padding: 0; border-radius: 50%; }
+  .walk-face:active { filter: brightness(1.25); }
+  .walk-dial { position: relative; width: 100%; aspect-ratio: 1; }
+  .walk-dial .rim {   /* conic gradient, masked to a ring; --rim-in is the ring's inner edge as a share of the radius */
+    position: absolute; inset: 0; border-radius: 50%;
+    -webkit-mask: radial-gradient(closest-side, transparent calc(var(--rim-in) - 0.6%), #000 var(--rim-in));
+    mask: radial-gradient(closest-side, transparent calc(var(--rim-in) - 0.6%), #000 var(--rim-in));
+  }
+  .walk-dial svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .walk-dial text { text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: #000; stroke-linejoin: round; }
+  #walk-detail { width: min(1040px, calc(100vw - 32px)); }
+  .walk-detail { padding: 20px 22px; display: grid; grid-template-columns: minmax(0, 17rem) minmax(0, 1fr); gap: 20px 28px; align-items: center; }
+  .walk-big { padding: 8px; }   /* room for the best-window arc outside the rim */
+  .walk-info { display: grid; gap: 12px; min-width: 0; }
+  .walk-info h3 { margin: 0; font-size: 1.1rem; }
+  .ws { font-size: 0.95rem; line-height: 1.4; }
+  .ws b { display: inline-block; min-width: 3.8rem; font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); }
+  .ws .when { font-weight: 650; margin-right: 6px; }
+  .ws .d { color: var(--muted); font-size: 0.85rem; }
+  .walk-hours { display: grid; font-size: 0.85rem; }
+  .wh { display: grid; grid-template-columns: 2.8rem 4.4rem 2.6rem 3rem 5.6rem minmax(8rem, 1fr); gap: 2px 8px; align-items: center; padding: 4px 8px; border-radius: 8px; white-space: nowrap; }
+  .wh.head { font-size: 0.62rem; color: var(--faint); text-transform: uppercase; letter-spacing: .08em; }
+  .wh.best { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+  .wh .t { color: var(--muted); }
+  .wh .sc i { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 6px; }
+  .wh .p { color: var(--rain); }
+  .wh .why { color: var(--faint); white-space: normal; line-height: 1.3; }   /* wrap rather than cut off reasons */
+  .walk-foot { display: flex; align-items: center; gap: 12px; }
+  .walk-foot .hint { margin: 0; }
+  .walk-foot .done { margin-left: auto; }
   .wear { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }   /* upper body / lower body + hi-viz; three tiles a row */
   .wear .w { grid-column: span 2; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); border-radius: 12px; padding: 8px 10px; min-width: 0; }
   .wear .w.viz, .wear .w.dog { display: flex; align-items: center; justify-content: center; padding: 8px 4px; }
@@ -264,7 +295,7 @@
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .pill { padding: 8px 14px; border-radius: 10px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--edge); font-size: 0.9rem; }
   .pill.on { background: var(--accent); color: #04121e; font-weight: 600; box-shadow: none; }
-  .settings .done, .about .done { padding: 8px 18px; border-radius: 10px; background: var(--accent); color: #04121e; font-weight: 600; }
+  .settings .done, .about .done, .walk-detail .done { padding: 8px 18px; border-radius: 10px; background: var(--accent); color: #04121e; font-weight: 600; }
   .settings-foot { display: flex; align-items: center; gap: 10px; }
   .settings-foot .done { margin-left: auto; }
 
@@ -306,6 +337,12 @@
     .card { padding: 14px; }
     .now-temp { font-size: 4.6rem; }
     .now-icon { width: 4.6rem; height: 4.6rem; }
+    .walk-face { width: 6rem; }
+    .walk-detail { grid-template-columns: 1fr; padding: 16px; }
+    .walk-big { width: min(17rem, 100%); margin: 0 auto; }
+    .wh { grid-template-columns: 2.6rem 4.2rem 2.4rem 2.6rem minmax(0, 1fr); padding: 4px 6px; }
+    .wh .why { grid-column: 2 / -1; font-size: 0.78rem; }   /* reasons drop to their own line */
+    .wh.head .why { display: none; }
     .clock .time { font-size: 1.3rem; }
     .forecast { grid-template-columns: 1fr; height: auto; padding: 10px; }
     .fc-label { display: flex; align-items: center; gap: 10px; }
@@ -327,6 +364,9 @@
       <div class="time" id="clock-time">--:--</div>
       <div class="date" id="clock-date"></div>
     </div>
+    <button class="icon-btn speak-btn" id="speak" aria-label="Read the weather aloud" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+    </button>
     <button class="icon-btn" id="open-settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
@@ -336,16 +376,18 @@
 
   <div class="main">
     <section class="card now">
-      <div class="now-top">
-        <div class="now-icon" id="now-icon"></div>
-        <div class="now-temp" id="now-temp">--</div>
-        <button class="icon-btn speak-btn" id="speak" aria-label="Read the weather aloud" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+      <div class="now-head">
+        <div class="now-top">
+          <div class="now-icon" id="now-icon"></div>
+          <div class="now-temp" id="now-temp">--</div>
+        </div>
+        <div>
+          <div class="now-desc" id="now-desc"></div>
+          <div class="now-sub" id="now-sub"></div>
+        </div>
+        <button class="walk-face" id="walk-face" aria-haspopup="dialog" aria-label="Walk times">
+          <div class="walk-dial" style="--rim-in:84%"><div class="rim" style="background:var(--line)"></div></div>
         </button>
-      </div>
-      <div>
-        <div class="now-desc" id="now-desc"></div>
-        <div class="now-sub" id="now-sub"></div>
       </div>
       <div class="wear-block">
         <div class="wear-head">
@@ -401,6 +443,21 @@
       <button type="button" data-walk="3">3 hrs</button>
     </div>
   </div>
+</dialog>
+
+<dialog id="walk-detail" aria-labelledby="walk-title">
+  <form class="walk-detail" method="dialog">
+    <div class="walk-big" id="walk-big"></div>
+    <div class="walk-info">
+      <h3 id="walk-title">Walk times · next 12 hrs</h3>
+      <div id="walk-summary"></div>
+      <div class="walk-hours" id="walk-hours"></div>
+      <div class="walk-foot">
+        <p class="hint" id="walk-hint"></p>
+        <button class="done" value="done">Done</button>
+      </div>
+    </div>
+  </form>
 </dialog>
 
 <dialog id="about" aria-labelledby="about-title">
@@ -514,6 +571,8 @@ const WEAR_DEFAULTS = {
   pawsGround: 115,   // …or the ground surface reaches this (°F)
   dogTemp: 32,       // Dogwear when the air is below this (°F)…
   dogPrecip: 2,      // …or expected precipitation reaches this level (index into PRECIP_LEVELS)
+  walkCool: 45,      // walk dial: feels-like below this counts against a walk (°F)…
+  walkWarm: 75,      // …and above this
   walk: 1,           // time outside, starting now (1, 2 or 3 hrs) — picked on the main panel
 };
 const WEAR_SLIDERS = [
@@ -548,6 +607,10 @@ const WEAR_SLIDERS = [
   ["Dogwear", [
     ["dogTemp", "When air temperature below", -10, 60, 1, "temp"],
     ["dogPrecip", "…or precipitation reaches", 1, 4, 1, "precip"],
+  ]],
+  ["Walk times", [
+    ["walkCool", "Comfortable from feels-like", 0, 65, 1, "temp"],
+    ["walkWarm", "…up to", 55, 95, 1, "temp"],
   ]],
   ["Forecast", [
     ["likely", "Count rain/snow as expected at chance ≥", 10, 90, 5, "pct"],
@@ -1027,6 +1090,7 @@ function renderWear() {
   state.wearNow = whatToWear(state.wx);
   $("wear").innerHTML = wearHTML(state.wearNow);
   $("headsup").innerHTML = headsUp(state.wx);   // Hot Paws follows the time out too
+  renderWalk();   // the best window is as long as the time out
   if (tip.layer) fillTip();   // keep an open popup current across the minute-by-minute refresh
 }
 
@@ -1082,6 +1146,181 @@ $("walk-dialog").addEventListener("click", (e) => {
   }
   if (b || e.target === $("walk-dialog")) $("walk-dialog").close();   // a pick, or a tap outside the box
 });
+
+/* ---------- walk times: a 12-hour watch face whose rim runs red → green by how good each hour is for a walk ---------- */
+const WALK_SPAN = 12;              // hours on the dial: once around a watch face, starting at the hour hand
+const WALK_AWAKE = [6, 22];        // best and avoid picks only start between these local hours
+const WALK_COLORS = [[0, "#ff4d5e"], [35, "#ff8a3d"], [60, "#ffc94a"], [80, "#c6e05a"], [100, "#4dd0a8"]];
+const WALK_WET = [0.35, 0.45, 0.65, 0.85, 1];   // how much of the precipitation chance counts, by precipLevel (0 = a chance with a dry forecast code)
+const walkWord = (s) => s >= 80 ? "Great" : s >= 60 ? "Good" : s >= 40 ? "Fair" : "Poor";
+function walkColor(s) {
+  const k = Math.max(1, WALK_COLORS.findIndex(([at]) => at >= s)), [a, ca] = WALK_COLORS[k - 1], [b, cb] = WALK_COLORS[k];
+  const f = Math.min(1, Math.max(0, (s - a) / (b - a))), ch = (c, i) => parseInt(c.slice(1 + 2 * i, 3 + 2 * i), 16);
+  return `rgb(${[0, 1, 2].map((i) => r(ch(ca, i) + (ch(cb, i) - ch(ca, i)) * f)).join(" ")})`;
+}
+const localHour = (t) => +fmt({ hour: "numeric", hourCycle: "h23" }).format(t * 1000);
+// Hour-hand angle (degrees clockwise from 12) for a time, in the forecast's time zone
+const clockDeg = (t) => {
+  const p = Object.fromEntries(fmt({ hour: "numeric", minute: "numeric", hourCycle: "h23" }).formatToParts(t * 1000).map((x) => [x.type, +x.value]));
+  return ((p.hour % 12) + p.minute / 60) * 30;
+};
+
+// Scores each hour from 0 (stay in) to 100 (perfect). Each problem takes its share off what's left, so rain
+// plus wind ranks below either alone. Precipitation at sample b covers the hour a → b (see whatToWear);
+// temperature and wind are taken at both ends.
+function walkHours(w) {
+  const h = w.hourly, S = state.wear, us = state.units === "us";
+  const F = us ? (t) => t : (t) => t * 9 / 5 + 32;
+  const IN = us ? (x) => x : (x) => x / 25.4;
+  const MPH = us ? (x) => x : (x) => x / 1.609;
+  const clamp = (x, max = 1) => Math.min(max, Math.max(0, x));
+  const now = Date.now() / 1000, i0 = hourStart(), slots = [];
+  for (let a = i0; a + 1 < h.time.length && slots.length < WALK_SPAN + 3; a++) {   // + 3 so a 3-hr walk can start in the last hour
+    const b = a + 1, both = (k) => [h[k]?.[a], h[k]?.[b]].map((v) => v ?? -Infinity);
+    const chance = h.precipitation_probability[b] ?? 0, code = h.weather_code[b] ?? 0, rate = IN(h.precipitation[b] ?? 0);
+    const level = Math.max(precipLevel(code), rate >= 0.1 ? 3 : rate >= 0.02 ? 2 : rate > 0 ? 1 : 0);
+    const harsh = code >= 95 || [56, 57, 66, 67].includes(code);   // storms and freezing rain: the whole chance counts
+    const feels = (h.apparent_temperature[a] + h.apparent_temperature[b]) / 2, fF = F(feels);
+    const air = F(Math.max(...both("temperature_2m"))), surface = F(Math.max(...both("soil_temperature_0cm")));
+    const wind = Math.max(0, ...both("wind_speed_10m")), gust = Math.max(0, ...both("wind_gusts_10m"));
+    const blow = MPH(Math.max(wind, gust * 0.7));   // gusts count, but a gust isn't the whole hour
+    const dark = ((h.is_day[a] ? 0 : 1) + (h.is_day[b] ? 0 : 1)) / 2;
+    const wet = precipLevel(code) || harsh ? wxInfo(code).label.toLowerCase() : "showers";
+    // [how much it counts against the walk, kind, detail for this hour]
+    const issues = [
+      [chance / 100 * (harsh ? 1 : WALK_WET[level]), "wet", `${wet} ${chance}%`],
+      [clamp((S.walkCool - fF) / 40, 0.8), "cold", `cold, feels ${r(feels)}°`],
+      [clamp((fF - S.walkWarm) / 20, 0.8), "hot", `hot, feels ${r(feels)}°`],
+      [state.pet && (air >= S.pawsAir || surface >= S.pawsGround) ? 0.4 : 0, "paws", "hot paws"],
+      [clamp((blow - 10) / 30) * 0.7, "windy", `windy, ${fmtWear(blow, "wind")}`],
+      [dark * 0.25, "dark", dark === 1 ? "dark" : h.is_day[a] ? "dusk" : "dawn"],
+    ].filter(([bad]) => bad >= 0.02).sort((x, y) => y[0] - x[0]);
+    slots.push({ t: h.time[a], start: a === i0 ? now : h.time[a], feels, chance, wind, gust, issues,
+      score: r(100 * issues.reduce((p, [bad]) => p * (1 - bad), 1)) });
+  }
+  if (!slots.length) return null;
+
+  // Best: the time out (1–3 hrs) with the highest average; within 3 points of it, sooner wins.
+  const n = S.walk, awake = (t) => localHour(t) >= WALK_AWAKE[0] && localHour(t) < WALK_AWAKE[1];
+  const windows = [];
+  for (let k = 0; k < WALK_SPAN && k + n <= slots.length; k++) {
+    const part = slots.slice(k, k + n);
+    windows.push({ k, n, start: slots[k].start, end: slots[k].start + n * 3600, slots: part, score: r(part.reduce((a, x) => a + x.score, 0) / n) });
+  }
+  const pool = windows.some((x) => awake(x.start)) ? windows.filter((x) => awake(x.start)) : windows;
+  const top = Math.max(...pool.map((x) => x.score)), best = pool.find((x) => x.score >= top - 3);
+
+  // Avoid: the run of Poor hours around the worst awake hour, when it's clearly worse than the best.
+  const poor = (k) => k >= 0 && k < Math.min(WALK_SPAN, slots.length) && slots[k].score < 40 && awake(slots[k].start);
+  let low = -1;
+  for (let k = 0; k < Math.min(WALK_SPAN, slots.length); k++) if (poor(k) && (low < 0 || slots[k].score < slots[low].score)) low = k;
+  let avoid = null;
+  if (low >= 0 && top - slots[low].score >= 20) {
+    let a = low, b = low;
+    while (poor(a - 1)) a--;
+    while (poor(b + 1)) b++;
+    avoid = { k: a, start: slots[a].start, end: slots[b].t + 3600, slots: slots.slice(a, b + 1) };
+  }
+  return { now, slots, best, avoid };
+}
+
+// Rim colors: interpolated between hour centers every 15 minutes, with a thin black seam at the hour hand
+// where now meets 12 hours from now.
+function walkRim(x) {
+  const pts = x.slots.map((s) => [s.t + 1800, s.score]);
+  const at = (t) => {
+    const k = pts.findIndex(([c]) => c >= t);
+    if (k <= 0) return pts[k < 0 ? pts.length - 1 : 0][1];
+    const [t0, s0] = pts[k - 1], [t1, s1] = pts[k];
+    return s0 + (s1 - s0) * (t - t0) / (t1 - t0);
+  };
+  const stops = Array.from({ length: 49 }, (_, j) => `${walkColor(at(x.now + j * 900))} ${(1.5 + j * 357 / 48).toFixed(1)}deg`);
+  return `conic-gradient(from ${clockDeg(x.now).toFixed(1)}deg, #000 0 1.5deg, ${stops.join(", ")}, #000 0)`;
+}
+
+// The watch face, compact (main panel) or big (details). viewBox 0–100; the rim fills the outer ring.
+function walkDial(x, big) {
+  const R = big ? 45.5 : 42, a0 = clockDeg(x.now), b = x.best;
+  const P = (deg, rad) => { const t = deg * Math.PI / 180; return `${(50 + rad * Math.sin(t)).toFixed(2)} ${(50 - rad * Math.cos(t)).toFixed(2)}`; };
+  const deg = (t) => Math.min(a0 + 358.5, a0 + (t - x.now) / 120);   // 12 hrs = 360°
+  const arc = (t0, t1, rad, attrs) => { const d0 = deg(t0), d1 = deg(t1);
+    return `<path d="M${P(d0, rad)} A${rad} ${rad} 0 ${d1 - d0 > 180 ? 1 : 0} 1 ${P(d1, rad)}" fill="none" stroke-linecap="round" ${attrs}/>`; };
+  let svg = "";
+  for (let i = 0; i < 12; i++) {
+    const q = i % 3 === 0;
+    svg += `<path d="M${P(i * 30, R - (q ? 6 : 3.5))} L${P(i * 30, R - 1.5)}" stroke="${q ? "var(--muted)" : "var(--line)"}" stroke-width="${big ? 1 : 1.6}"/>`;
+  }
+  if (big) {   // real hours, so it's clear which side of noon and midnight each one is
+    x.slots.slice(0, WALK_SPAN).forEach((s) => {
+      svg += `<text x="${P(deg(s.t + 3600), R - 11).replace(" ", '" y="')}" font-size="4.4" fill="var(--muted)" stroke-width="0">${fHour(s.t + 3600)}</text>`;
+    });
+    if (x.avoid) svg += arc(x.avoid.start, x.avoid.end, 52.5, 'stroke="var(--danger)" stroke-width="1.6" stroke-dasharray="2 2.6"');
+  }
+  svg += arc(b.start, b.end, big ? 52.5 : 54, `stroke="var(--text)" stroke-width="${big ? 1.8 : 2.8}"`);   // best window, just outside the rim
+  const hand = (d, len, wd) => `<path d="M${P(d + 180, len * 0.16)} L${P(d, len)}" stroke="var(--text)" stroke-width="${wd}" stroke-linecap="round"/>`;
+  svg += hand(a0, R * 0.52, big ? 2.6 : 4) + hand((a0 % 30) * 12, R * 0.8, big ? 1.4 : 2.4) + `<circle cx="50" cy="50" r="${big ? 2.2 : 3.4}" fill="var(--text)"/>`;
+  const when = b.k ? fHour(b.start) : "Now";
+  svg += big
+    ? `<text x="50" y="63" font-size="4.2" fill="var(--muted)" stroke-width="2.4" letter-spacing=".6">BEST WALK</text>` +
+      `<text x="50" y="72" font-size="8.5" font-weight="650" fill="${walkColor(b.score)}" stroke-width="3">${b.k ? `${when}–${fHour(b.end)}` : "Now"}</text>`
+    : `<text x="50" y="65" font-size="8.5" fill="var(--muted)" stroke-width="3" letter-spacing="1">BEST</text>` +
+      `<text x="50" y="79" font-size="15" font-weight="650" fill="${walkColor(b.score)}" stroke-width="3.5">${when}</text>`;
+  return `<div class="walk-dial" style="--rim-in:${R * 2}%"><div class="rim" style="background:${walkRim(x)}"></div>` +
+    `<svg viewBox="0 0 100 100" aria-hidden="true">${svg}</svg></div>`;
+}
+
+function renderWalk() {
+  const x = state.walkNow = walkHours(state.wx);
+  if (!x) return;
+  $("walk-face").innerHTML = walkDial(x, false);
+  $("walk-face").setAttribute("aria-label", `Walk times: best ${x.best.k ? fHour(x.best.start) : "now"} (${walkWord(x.best.score)}). Tap for details.`);
+  if ($("walk-detail").open) fillWalkDetail();
+}
+
+function fillWalkDetail() {
+  const x = state.walkNow, u = U(), S = state.wear;
+  if (!x) return;
+  $("walk-big").innerHTML = walkDial(x, true);
+  const span = (w) => w.k ? `${fHour(w.start)}–${fHour(w.end)}` : `Now–${fHour(w.end)}`;
+  const describe = (slots) => {
+    const f = slots.map((s) => r(s.feels)), lo = Math.min(...f), hi = Math.max(...f);
+    const kinds = new Map();
+    slots.forEach((s) => s.issues.forEach(([bad, kind]) => bad >= 0.1 && kinds.set(kind, Math.max(bad, kinds.get(kind) ?? 0))));
+    const why = [...kinds].sort((a, b) => b[1] - a[1]).map(([k]) => ({ paws: "hot paws" }[k] || k));
+    return [why.length ? cap(why.join(", ")) : "Nice", `feels ${lo}°${hi !== lo ? `–${hi}°` : ""}`,
+      `${Math.max(...slots.map((s) => s.chance))}% precip`, `wind ${r(Math.max(...slots.map((s) => s.wind)))} ${u.wind}`].join(" · ");
+  };
+  $("walk-summary").innerHTML =
+    `<div class="ws"><b>Best</b><span class="when" style="color:${walkColor(x.best.score)}">${span(x.best)}</span>` +
+      `${walkWord(x.best.score)}<div class="d">${describe(x.best.slots)}</div></div>` +
+    (x.avoid ? `<div class="ws"><b>Avoid</b><span class="when" style="color:var(--danger)">${span(x.avoid)}</span>` +
+      `<div class="d">${describe(x.avoid.slots)}</div></div>` : "");
+  $("walk-hours").innerHTML = `<div class="wh head"><span></span><span>Walk</span><span>Feels</span><span>Precip</span><span>Wind</span><span class="why">Why</span></div>` +
+    x.slots.slice(0, WALK_SPAN).map((s, k) => {
+      const inBest = k >= x.best.k && k < x.best.k + x.best.n;
+      const why = s.issues.filter(([bad]) => bad >= 0.08).map(([, , d]) => d).join(", ");
+      return `<div class="wh ${inBest ? "best" : ""}"><span class="t">${k ? fHour(s.t) : "Now"}</span>` +
+        `<span class="sc"><i style="background:${walkColor(s.score)}"></i>${walkWord(s.score)}</span>` +
+        `<span style="color:${tempColor(s.feels)}">${r(s.feels)}°</span><span class="p">${s.chance}%</span>` +
+        `<span>${r(s.wind)}${s.gust - s.wind >= 8 ? ` G${r(s.gust)}` : ""} ${u.wind}</span><span class="why">${esc(why || "—")}</span></div>`;
+    }).join("");
+  $("walk-hint").textContent = `Scored by rain and snow, feels-like (comfortable ${fmtWear(S.walkCool, "temp")}–${fmtWear(S.walkWarm, "temp")}), ` +
+    `wind, darkness${state.pet ? " and hot paws" : ""}. Best is for your ${fmtWear(S.walk, "hours")} out, starting ${WALK_AWAKE[0]}a–${WALK_AWAKE[1] - 12}p.`;
+}
+
+// Tap the dial to open the details; the dial grows into the big one where the browser can animate it.
+$("walk-face").onclick = () => {
+  const show = () => { fillWalkDetail(); $("walk-detail").showModal(); };
+  if (!state.walkNow) return;
+  if (!document.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) return show();
+  $("walk-face").style.viewTransitionName = "walk-dial";
+  document.startViewTransition(() => {
+    $("walk-face").style.viewTransitionName = "";
+    show();
+    $("walk-big").style.viewTransitionName = "walk-dial";
+  }).finished.finally(() => { $("walk-big").style.viewTransitionName = ""; });
+};
+$("walk-detail").addEventListener("click", (e) => { if (e.target === $("walk-detail")) $("walk-detail").close(); });   // tap outside the box
 
 function wearHTML(x) {
   const tile = (layer, k, v, cls) =>
@@ -1184,6 +1423,10 @@ function spokenSummary() {
     .replace(/<[^>]+>/g, "").replace(/°/g, "").replace(/(\d) in\b/g, "$1 inches").replace(/ mph\b/g, " miles per hour")
     .split(" · ").filter((n) => n && !/umbrella/i.test(n));
   if (notes.length) parts.push(notes.map((n) => /[.!?]$/.test(n) ? n : n + ".").join(" "));
+
+  const walk = state.walkNow, sayHour = (t) => fmt({ hour: "numeric" }).format(t * 1000);
+  if (walk) parts.push((walk.best.score < 40 ? "No good time for a walk in the next 12 hours; the least bad is " : "Best time for a walk: ") +
+    (walk.best.k ? sayHour(walk.best.start) : "now") + "." + (!walk.avoid ? "" : walk.avoid.k ? ` Avoid ${sayHour(walk.avoid.start)} to ${sayHour(walk.avoid.end)}.` : ` Avoid it until ${sayHour(walk.avoid.end)}.`));
 
   if (x) {
     const n = state.wear.walk;
@@ -1592,6 +1835,8 @@ $("wear-sliders").addEventListener("input", (e) => {
   if (key === "light") { W.medium = Math.min(W.medium, W.light); W.heavy = Math.min(W.heavy, W.medium); }
   if (key === "medium") { W.light = Math.max(W.light, W.medium); W.heavy = Math.min(W.heavy, W.medium); }
   if (key === "heavy") { W.medium = Math.max(W.medium, W.heavy); W.light = Math.max(W.light, W.medium); }
+  if (key === "walkCool") W.walkWarm = Math.max(W.walkWarm, W.walkCool);   // and a comfortable range that isn't inside out
+  if (key === "walkWarm") W.walkCool = Math.min(W.walkCool, W.walkWarm);
   store.set("wear", W);
   syncWearSliders();
   if (state.wx) renderWear();

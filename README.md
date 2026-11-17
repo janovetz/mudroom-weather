@@ -4,6 +4,7 @@ A fast, ad-free, single-page weather display built for an always-on tablet (tune
 
 - Current conditions, US air quality (AQI), "heads-up" summary, and NWS text forecast
 - What to wear for the next 1–3 hours (headwear, shell, insulation, pants, footwear, hi-viz), with adjustable set points and tap-for-reason tiles
+- Walk times: a watch-face dial whose rim runs red → green over the next 12 hours, with the best (and worst) time for a walk; tap it for an hour-by-hour breakdown
 - Spoken summary of conditions and what to wear, read aloud on tap
 - Pet Mode: a Hot Paws warning when it's hot enough to burn paws on pavement
 - Dogwear: an optional tile showing when the dog should wear gear, by temperature or precipitation

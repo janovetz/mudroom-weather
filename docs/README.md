@@ -5,6 +5,7 @@ Mudroom Weather is a single-page weather display for an always-on tablet. It als
 - [Setup](#setup)
 - [Screen layout](#screen-layout)
 - [What to wear](#what-to-wear)
+- [Walk times](#walk-times)
 - [Heads-up line](#heads-up-line)
 - [Spoken summary](#spoken-summary)
 - [Pet Mode](#pet-mode)
@@ -46,9 +47,9 @@ For US locations without a `name`, the nearest town is looked up from the Nation
 
 | Area | Contents | Interaction |
 |---|---|---|
-| Header | Place name, update status, clock and date | ⚙ opens Settings |
+| Header | Place name, update status, clock and date | 🔊 reads the [spoken summary](#spoken-summary); ⚙ opens Settings |
 | Alerts | Active NWS watches, warnings and advisories (US only). Warnings and Severe/Extreme alerts are red; others are orange. | Tap to expand the full text |
-| Conditions | Icon, temperature, sky, feels-like, today's high and low | 🔊 reads the [spoken summary](#spoken-summary) |
+| Conditions | Icon, temperature, sky, feels-like, today's high and low, and the [walk dial](#walk-times) | Tap the dial for the hour-by-hour walk breakdown |
 | What to wear | Six tiles (seven with [Dogwear](#dogwear) on) plus a one-line reason. See [What to wear](#what-to-wear). | Tap a tile for its reasoning. **Out for N hr** sets the time out. |
 | Heads-up | Notable changes in the next 18 hours. See [Heads-up line](#heads-up-line). | — |
 | Stats | Wind (with gusts when they exceed the sustained speed by 8+), humidity and dew point, UV and US AQI, pressure, next sunrise or sunset | Hover AQI for the PM2.5 value |
@@ -133,7 +134,37 @@ Adjust these in Settings → *What to wear*. They are stored in °F, inches and 
 | | …or ground surface ≥ | 115 °F | 90–140 °F |
 | Dogwear | When air temperature below | 32 °F | −10–60 °F |
 | | …or precipitation reaches | Light rain/snow | Drizzle, Light, Moderate or Heavy rain/snow |
+| Walk times | Comfortable from feels-like | 45 °F | 0–65 °F |
+| | …up to | 75 °F | 55–95 °F |
 | Forecast | Count rain/snow as expected at chance ≥ | 40% | 10–90% |
+
+---
+
+## Walk times
+
+The watch face next to the current conditions shows how good each of the next 12 hours is for a walk. The hour and minute hands show the current time. The colored rim starts at the hour hand and runs clockwise for 12 hours, from red (poor) through yellow to green (great); a thin black gap at the hour hand marks where the 12 hours end. A white arc outside the rim marks the best time to go, and the center names its start time (**Now** or, for example, **3p**). The best window is as long as the time out chosen with **Out for N hr**.
+
+Tap the dial for the details: a larger dial with real hour labels (and a dashed red arc over the hours to avoid), the best and avoid windows with what drives them, and an hour-by-hour list of rating, feels-like, precipitation chance, wind and the reasons for each hour's score. Tap outside the box, **Done** or Esc to close it. The dial and the details update every minute.
+
+### Scoring
+
+Each hour starts at 100. Every problem takes its share off what's left (score × (1 − share)), so two moderate problems rank below either one alone.
+
+| Problem | Share taken off | Notes |
+|---|---|---|
+| Precipitation | Chance × severity | Severity by [precipitation level](#dogwear): drizzle 45%, light 65%, moderate 85%, heavy 100%; a chance with a dry forecast counts 35%. Thunderstorms and freezing rain count the whole chance. |
+| Cold | (comfortable-from − feels-like) ÷ 40 °F, up to 80% | Feels-like averaged over the hour |
+| Heat | (feels-like − comfortable-up-to) ÷ 20 °F, up to 80% | |
+| Hot paws | 40% | [Pet Mode](#pet-mode) on and the air or ground surface reaches its Hot Paws set point |
+| Wind | (wind − 10 mph) ÷ 30 mph × 70%, up to 70% | The higher of sustained wind and 70% of the gust |
+| Darkness | 25% (half for an hour that includes sunrise or sunset) | |
+
+Ratings: **Great** 80+, **Good** 60–79, **Fair** 40–59, **Poor** under 40.
+
+- **Best**: the time out (1–3 hours) with the highest average score, starting now or on the hour, between 6 AM and 10 PM. A start within 3 points of the top score wins if it's sooner.
+- **Avoid**: the run of Poor hours (between 6 AM and 10 PM) around the worst one, shown only when it scores at least 20 points below the best.
+
+The comfortable range is set in Settings → *What to wear* → *Walk times*. The other weights are constants in `walkHours()`.
 
 ---
 
@@ -158,18 +189,19 @@ A short summary of the next 18 hours. Each item appears only when it applies:
 
 ## Spoken summary
 
-The 🔊 button next to the temperature reads a short summary using the browser's built-in speech (no network service). Tap again to stop. The button is hidden if the browser has no speech support.
+The 🔊 button in the header reads a short summary using the browser's built-in speech (no network service). Tap again to stop. The button is hidden if the browser has no speech support.
 
 The summary contains, in order:
 
 1. Temperature (with units), sky, feels-like when it differs by 3° or more, today's high and low
 2. Names of active NWS alerts
 3. The heads-up items, except the umbrella note
-4. What to wear for the time out. Tiles set to None and Light footwear are skipped.
+4. The best time for a walk, and the hours to avoid if any (see [Walk times](#walk-times))
+5. What to wear for the time out. Tiles set to None and Light footwear are skipped.
 
 Example:
 
-> 72 Fahrenheit and clear. High 75, low 50. Dropping to 57 by 6 AM. For 2 hours: cap and light insulation.
+> 72 Fahrenheit and clear. High 75, low 50. Dropping to 57 by 6 AM. Best time for a walk: now. For 2 hours: cap and light insulation.
 
 ---
 
@@ -231,7 +263,7 @@ The About box shows the first time the page opens on a device and stays until it
 | NWS alerts | Every 5 minutes |
 | NWS text forecast, air quality | Every 10 minutes |
 | Radar | Every 5 minutes; only the newest frame is fetched |
-| What to wear, heads-up, Hi-Viz, dimming | Every minute |
+| What to wear, heads-up, walk dial, Hi-Viz, dimming | Every minute |
 | Whole page | Reload every 12 hours |
 
 On load, the page draws immediately from the last saved forecast, then refreshes in the background. The header shows **Updated N min ago**; after 20 minutes without a successful update it turns orange and reads **Offline**. Returning to the page after it's been hidden (e.g. reopening the home-screen app, whose timers the OS pauses in the background) immediately redraws everything for the current time from the data on hand, then refreshes anything that's out of date.
@@ -272,6 +304,7 @@ The site is published by GitHub Pages from the `main` branch; every push to `mai
 | `WEAR_DEFAULTS`, `WEAR_SLIDERS` | What-to-wear set points, defaults and slider ranges |
 | `whatToWear()` | What-to-wear rules and tile reasons |
 | `headsUp()`, `hotPaws()` | Heads-up line and Pet Mode check |
+| `walkHours()`, `walkDial()` | Walk-time scores, best and avoid windows, and the dial |
 | `spokenSummary()` | Text for the spoken summary |
 | `radar` | Map, radar frames and animation |
 | `cacheKey()` | Version of the saved forecast; bump it when the requested API fields change |
